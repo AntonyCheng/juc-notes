@@ -211,3 +211,129 @@ public class Demo01_2 {
 
 }
 ```
+
+## Lock接口
+
+### Synchronized
+
+#### Synchronized关键字回顾
+
+synchronized是Java中的关键字，是一种同步锁。它修饰的对象有几种，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_1.java)如下：
+
+（1）修饰一个代码块，被修饰的代码块称为同步语句块，其作用的范围是大括号{}括起来的代码，作用的对象是调用这个代码块的对象。
+
+```java
+/**
+ * 修饰代码块
+ */
+public void syncCodeBlock() {
+    synchronized (this) {
+        System.out.println("同步代码块...");
+    }
+}
+```
+
+（2）修饰一个方法，被修饰的方法称为同步方法，其作用的范围是整个方法，作用的对象是调用这个方法的对象。注意：虽然可以使用synchronized来定义方法，但synchronized并不属于方法定义的一部分，因此，synchronized关键字不能被继承。如果在父类中的某个方法使用了synchronized关键字，而在子类中覆盖了这个方法，在子类中的这个方法默认情况下并不是同步的，而必须显式地在子类的这个方法中加上synchronized关键字才可以。当然，还可以在子类方法中调用父类中相应的方法，这样虽然子类中的方法不是同步的，但子类调用了父类的同步方法，因此，子类的方法也就相当于同步了。
+
+```java
+/**
+ * 修饰方法
+ */
+public synchronized void syncMethod() {
+    System.out.println("同步方法...");
+}
+```
+
+（3）修饰一个静态的方法，其作用的范围是整个静态方法，作用的对象是这个类的所有对象。
+
+```java
+/**
+ * 修饰静态方法
+ */
+public static synchronized void syncStaticMethod() {
+    System.out.println("同步静态方法...");
+}
+```
+
+#### Synchronized编程案例
+
+最初级的多线程编程步骤如下：
+
+1. 确定共享资源，并且创建资源类，在该类中创建属性和操作方法。
+2. 创建多线程，调用上述资源类的操作方法去操作共享资源。
+
+案例：出售门票，有3个售票员，一共有30张票，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_2.java)如下：
+
+```java
+/**
+ * Synchronized编程案例
+ * 出售门票，有3个售票员，一共有30张票
+ *
+ * @author AntonyCheng
+ */
+
+public class Demo02_2 {
+
+    public static void main(String[] args) {
+        Ticket ticket = new Ticket();
+        // 定义3个售票员（创建三个线程）
+        Thread sale01 = new Thread(() -> {
+            while (true) {
+                ticket.sale();
+            }
+        }, "sale01");
+        Thread sale02 = new Thread(() -> {
+            while (true) {
+                ticket.sale();
+            }
+        }, "sale02");
+        Thread sale03 = new Thread(() -> {
+            while (true) {
+                ticket.sale();
+            }
+        }, "sale03");
+        // 让3个售票员开始售票（启动三个线程）
+        sale01.start();
+        sale02.start();
+        sale03.start();
+    }
+
+}
+
+/**
+ * 编写门票资源类
+ */
+class Ticket {
+
+    /**
+     * 定义门票数量
+     */
+    private static int ticketNumber = 30;
+
+    /**
+     * 定义卖出数量
+     */
+    private static int saleNumber = 0;
+
+    /**
+     * 定义售票方法，这里使用synchronized修饰代码块
+     */
+    public void sale() {
+        synchronized (this) {
+            if (ticketNumber > 0) {
+                System.out.println(Thread.currentThread().getName() + "卖出第" + (++saleNumber) + "张票，还剩" + (--ticketNumber) + "张票");
+            }
+        }
+    }
+
+}
+```
+
+如果一个代码块被synchronized修饰了，当一个线程获取了对应的锁，并执行该代码块时，其他线程便只能一直等待，等待获取锁的线程释放锁，而这里获取锁的线程释放锁只会有两种情况：
+
+1. 获取锁的线程执行完了该代码块，然后线程释放对锁的占有。
+2. 线程执行发生异常，此时JVM会让线程自动释放锁。
+
+那么如果这个获取锁的线程由于要等待IO或者其他原因（比如调用sleep方法）被阻塞了，但是又没有释放锁，其他线程便只能干巴巴地等待，试想一下，这多么影响程序执行效率。
+
+因此就需要有一种机制可以不让等待的线程一直无期限地等待下去（比如只等待一定的时间或者能够响应中断），通过 Lock 就可以办到。
