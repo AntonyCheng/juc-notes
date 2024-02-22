@@ -336,4 +336,105 @@ class Ticket {
 
 那么如果这个获取锁的线程由于要等待IO或者其他原因（比如调用sleep方法）被阻塞了，但是又没有释放锁，其他线程便只能干巴巴地等待，试想一下，这多么影响程序执行效率。
 
-因此就需要有一种机制可以不让等待的线程一直无期限地等待下去（比如只等待一定的时间或者能够响应中断），通过 Lock 就可以办到。
+因此就需要有一种机制可以不让等待的线程一直无期限地等待下去（比如只等待一定的时间或者能够响应中断），通过 Lock 接口就可以办到。
+
+### 什么是Lock接口
+
+Lock锁接口实现提供了比使用同步方法和语句可以获得的更广泛的锁操作。它们允许更灵活的结构，可能具有非常不同的属性，并且可能支持多个关联的条件对象。Lock提供了比synchronized更多的功能。
+
+**Lock与的Synchronized区别：**
+
+- Lock不是Java语言内置的，synchronized是Java语言的关键字，因此是内置特性。Lock是一个类，通过这个类可以实现同步访问。
+- Lock和synchronized有一点非常大的不同，采用synchronized不需要用户去手动释放锁，当synchronized方法或者synchronized代码块执行完之后，系统会自动让线程释放对锁的占用；而Lock则必须要用户去手动释放锁，如果没有主动释放锁，就有可能导致出现死锁现象。
+
+#### Lock接口
+
+```java
+public interface Lock {
+    
+    /**
+     * 获取锁，拿到锁就执行之后的代码，没拿到锁该线程就阻塞等待
+     */
+    void lock();
+
+    /**
+     * 获取锁，拿到锁就执行之后的代码，没拿到锁该线程就阻塞等待，但是等待的过程中被中断，就抛出异常
+     */
+    void lockInterruptibly() throws InterruptedException;
+
+    /**
+     * 尝试获取锁，拿到锁就返回true，没拿到锁就返回false
+     */
+    boolean tryLock();
+
+    /**
+     * 尝试在规定时间内获取锁，拿到锁就返回true，没拿到锁就返回false，如果等待锁的过程中被中断就抛出异常
+     */
+    boolean tryLock(long time, TimeUnit unit) throws InterruptedException;
+
+    /**
+     * 解锁
+     */
+    void unlock();
+
+    /**
+     * 返回Condition实例，该实例和锁相互绑定，可使用Condition实例进行await()等待和signal()唤醒操作
+     */
+    Condition newCondition();
+}
+```
+
+该接口有[三个常用的实现类](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_3.java)：`ReentrantLock` （可重入锁）、`ReentrantReadWriteLock.ReadLock` （读锁）、`ReentrantReadWriteLock.WriteLock` （写锁）。接下来以 ReentrantLock 类为例，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_4.java)如下：
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * ReentrantLock 可重入锁示例代码
+ *
+ * @author AntonyCheng
+ */
+public class Demo02_4 {
+
+    /**
+     * 定义可重入锁
+     */
+    private static final ReentrantLock REENTRANT_LOCK = new ReentrantLock();
+
+    /**
+     * lock() 方法标准用法
+     */
+    public static void lockSample() {
+        REENTRANT_LOCK.lock();
+        try {
+            System.out.println("现在执行lock()拿到锁之后的代码，没有执行finally中的代码");
+        } finally {
+            System.out.println("现在执行finally中的代码，释放锁");
+            REENTRANT_LOCK.unlock();
+        }
+    }
+
+    /**
+     * tryLock() 标准用法
+     */
+    public static void tryLockSample() {
+        if (REENTRANT_LOCK.tryLock()) {
+            System.out.println("现在执行tryLock()拿到锁之后的代码");
+        } else {
+            System.out.println("现在执行tryLock()没拿到锁之后的代码");
+        }
+    }
+
+    /**
+     * 方法入口
+     */
+    public static void main(String[] args) throws InterruptedException {
+        // 演示lock()方法
+        lockSample();
+        // 演示tryLock()方法
+        new Thread(Demo02_4::tryLockSample).start();
+        tryLockSample();
+    }
+
+}
+```
