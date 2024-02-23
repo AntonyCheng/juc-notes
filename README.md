@@ -387,6 +387,7 @@ public interface Lock {
 该接口有[三个常用的实现类](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_3.java)：`ReentrantLock` （可重入锁）、`ReentrantReadWriteLock.ReadLock` （读锁）、`ReentrantReadWriteLock.WriteLock` （写锁）。接下来以 ReentrantLock 类为例，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_4.java)如下：
 
 ```java
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -394,6 +395,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @author AntonyCheng
  */
+
 public class Demo02_4 {
 
     /**
@@ -403,6 +405,9 @@ public class Demo02_4 {
 
     /**
      * lock() 方法标准用法
+     * 采用lock()，必须主动去释放锁，并且在发生异常时，不会自动释放锁。
+     * 因此一般来说，使用Lock必须在try{}catch{}块中进行，并且将释放锁的操作放在finally块中进行，
+     * 以保证锁一定被被释放，防止死锁的发生。
      */
     public static void lockSample() {
         REENTRANT_LOCK.lock();
@@ -419,9 +424,49 @@ public class Demo02_4 {
      */
     public static void tryLockSample() {
         if (REENTRANT_LOCK.tryLock()) {
-            System.out.println("现在执行tryLock()拿到锁之后的代码");
+            try {
+                System.out.println("现在执行tryLock()拿到锁之后的代码");
+            } finally {
+                REENTRANT_LOCK.unlock();
+            }
         } else {
             System.out.println("现在执行tryLock()没拿到锁之后的代码");
+        }
+    }
+
+    /**
+     * newCondition() 用法
+     * 关键字synchronized与wait()/notify()这两个方法一起使用可以实现等待/通知模式， Lock锁的newContition()方法返回Condition对象，Condition类中await()和signal()也可以实现等待/通知模式。
+     * 注意：在调用Condition的await()/signal()方法前，也需要线程持有相关的Lock锁，调用await()后线程会释放这个锁，在singal()调用后会从当前Condition对象的等待队列中，唤醒 一个线程，唤醒的线程尝试获得锁， 一旦获得锁成功就继续执行。
+     */
+    public static void newConditionSample() {
+        Condition condition = REENTRANT_LOCK.newCondition();
+        new Thread(() -> {
+            REENTRANT_LOCK.lock();
+            try {
+                System.out.println(Thread.currentThread().getName() + "线程开始等待...");
+                condition.await();
+                System.out.println(Thread.currentThread().getName() + "线程结束等待...");
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } finally {
+                REENTRANT_LOCK.unlock();
+            }
+        }, "await").start();
+        try {
+            // 主线程休眠两秒
+            System.out.println(Thread.currentThread().getName() + "线程休眠两秒...");
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        // 让主线程获得锁
+        REENTRANT_LOCK.lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + "线程休眠完成，唤醒等待中的线程...");
+            condition.signalAll();
+        } finally {
+            REENTRANT_LOCK.unlock();
         }
     }
 
@@ -434,7 +479,100 @@ public class Demo02_4 {
         // 演示tryLock()方法
         new Thread(Demo02_4::tryLockSample).start();
         tryLockSample();
+        // 演示newCondition()方法
+        newConditionSample();
     }
 
 }
 ```
+
+对于`ReentrantReadWriteLock.ReadLock` （读锁）和`ReentrantReadWriteLock.WriteLock` （写锁）还有以下注意事项：
+
+- 如果有一个线程已经占用了读锁，则此时其他线程如果要申请写锁，则申请写锁的线程会一直等待释放读锁。
+- 如果有一个线程已经占用了写锁，则此时其他线程如果申请写锁或者读锁，则申请的线程会一直等待释放写锁。
+
+#### Lock接口编程案例
+
+使用Lock接口实现售票案例，即出售门票，有3个售票员，一共有30张票，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_5.java)如下：
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * 基于Lock接口实现售票案例
+ * 3个售票员，一共有30张票
+ *
+ * @author AntonyCheng
+ */
+public class Demo02_5 {
+
+    public static void main(String[] args) {
+        LockTicket ticket = new LockTicket();
+        // 定义3个售票员（创建三个线程）
+        Thread sale01 = new Thread(() -> {
+            while (true) {
+                ticket.sale();
+            }
+        }, "sale01");
+        Thread sale02 = new Thread(() -> {
+            while (true) {
+                ticket.sale();
+            }
+        }, "sale02");
+        Thread sale03 = new Thread(() -> {
+            while (true) {
+                ticket.sale();
+            }
+        }, "sale03");
+        // 让3个售票员开始售票（启动三个线程）
+        sale01.start();
+        sale02.start();
+        sale03.start();
+    }
+
+}
+
+/**
+ * 编写门票资源类
+ */
+class LockTicket {
+
+    /**
+     * 定义可重入锁
+     */
+    private static final ReentrantLock LOCK = new ReentrantLock();
+
+    /**
+     * 定义门票数量
+     */
+    private static int ticketNumber = 30;
+
+    /**
+     * 定义卖出数量
+     */
+    private static int saleNumber = 0;
+
+    /**
+     * 定义售票方法，这里使用synchronized修饰代码块
+     */
+    public void sale() {
+        LOCK.lock();
+        try{
+            if (ticketNumber > 0) {
+                System.out.println(Thread.currentThread().getName() + "卖出第" + (++saleNumber) + "张票，还剩" + (--ticketNumber) + "张票");
+            }
+        }finally {
+            LOCK.unlock();
+        }
+    }
+
+}
+```
+
+#### 小结（重点）
+
+1. Lock是一个接口，而synchronized是Java中的关键字，synchronized是内置的语言实现；
+2. synchronized在发生异常时，会自动释放线程占有的锁，因此不会导致死锁现象发生；而Lock在发生异常时，如果没有主动通过unLock()去释放锁，则很可能造成死锁现象，因此使用Lock时需要在finally块中释放锁；
+3. Lock可以让等待锁的线程响应中断，而synchronized却不行，使用synchronized时，等待的线程会一直等待下去，不能够响应中断；
+4. 通过Lock可以知道有没有成功获取锁，而synchronized却无法办到。
+5. Lock可以提高多个线程进行读操作的效率。
