@@ -4,7 +4,7 @@
 
 ### JUC简介
 
-在 Java 中，线程部分是一个重点，本篇文章说的JUC也是关于线程的。JUC就是 `java.util .concurrent`工具包的简称。这是一个处理线程的工具包，JDK 1.5 开始出现的。
+在 Java 中，线程部分是一个重点，本篇文章说的JUC也是关于线程的。JUC就是 `java.util.concurrent`工具包的简称。这是一个处理线程的工具包，JDK 1.5 开始出现的。
 
 ![image-20240220200930926](./assets/image-20240220200930926.png)
 
@@ -218,7 +218,13 @@ public class Demo01_2 {
 
 #### Synchronized关键字回顾
 
-synchronized是Java中的关键字，是一种同步锁。它修饰的对象有几种，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_1.java)如下：
+synchronized是Java中的关键字，是一种同步锁。而实现同步的基础：Java中的每一个对象都可以作为锁，具体表现为以下3种形式：
+
+- 对于同步代码块，锁是 synchonized 括号里的配置对象。
+- 对于同步普通方法，锁是当前类的 Class 对象。
+- 对于同步静态方法，锁是当前实例的对象。
+
+它修饰的对象有几种，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_1.java)如下：
 
 （1）修饰一个代码块，被修饰的代码块称为同步语句块，其作用的范围是大括号{}括起来的代码，作用的对象是调用这个代码块的对象。
 
@@ -257,7 +263,7 @@ public static synchronized void syncStaticMethod() {
 
 #### Synchronized编程案例
 
-最初级的多线程编程步骤如下：
+**初级的多线程编程步骤如下**：
 
 1. 确定共享资源，并且创建资源类，在该类中创建属性和操作方法。
 2. 创建多线程，调用上述资源类的操作方法去操作共享资源。
@@ -576,3 +582,756 @@ class LockTicket {
 3. Lock可以让等待锁的线程响应中断，而synchronized却不行，使用synchronized时，等待的线程会一直等待下去，不能够响应中断；
 4. 通过Lock可以知道有没有成功获取锁，而synchronized却无法办到。
 5. Lock可以提高多个线程进行读操作的效率。
+
+## 线程通信
+
+**中级的多线程编程步骤如下**：
+
+1. 确定共享资源，并且创建资源类，在该类中创建属性和操作方法。
+2. 在资源类的操作方法中需要做三件事：判断、干活和通知。**（这里就涉及到线程通信）**
+3. 创建多线程，调用上述资源类的操作方法去操作共享资源。
+
+### 初级实现（初识）
+
+线程间通信的模型有两种：共享内存和消息传递，以下方式都是基本这两种模型来实现的。我们来基本一道面试常见的题目来分析，即**[两个线程，当前数值初始值为0，一个线程对当前数值加1，另一个线程对当前数值减1，要求用线程间通信实现0，1交替](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_1.java)**：
+
+通过synchronized实现：
+
+```java
+/**
+ * 通过synchronized关键字实现线程通信类
+ */
+class Demo03_1BySynchronized {
+
+    /**
+     * 定义当前数值
+     */
+    private static int initNum = 0;
+
+    /**
+     * 增加1
+     */
+    private synchronized void increase() {
+        try {
+            // 如果initNum想增加为1，那么此时就必须为0
+            if (initNum != 0) {
+                wait();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字增加1，从" + (initNum++) + "变为" + initNum);
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 减少1
+     */
+    private synchronized void decrease() {
+        try {
+            // 如果initNum想减少为0，那么此时就必须为1
+            if (initNum != 1) {
+                wait();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字减少1，从" + (initNum--) + "变为" + initNum);
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 对外测试方法
+     */
+    public void test() {
+        new Thread(() -> {
+            for (int i = 0; i < 5; i++) {
+                increase();
+            }
+        },"bySynchronizedIncrease").start();
+        new Thread(() -> {
+            for (int i = 0; i < 5; i++) {
+                decrease();
+            }
+        },"bySynchronizedDecrease").start();
+    }
+
+}
+```
+
+通过Lock接口实现：
+
+```java
+/**
+ * 通过Lock接口实现线程通信类
+ */
+class Demo03_1ByLock {
+
+    /**
+     * 定义当前数值
+     */
+    private static int initNum = 0;
+
+    /**
+     * 定义Lock锁
+     */
+    private static final ReentrantLock REENTRANT_LOCK = new ReentrantLock();
+
+    /**
+     * 定义等待/通知类
+     */
+    private static final Condition CONDITION = REENTRANT_LOCK.newCondition();
+
+    /**
+     * 增加1
+     */
+    private void increase() {
+        REENTRANT_LOCK.lock();
+        try {
+            // 如果initNum想增加为1，那么此时就必须为0
+            if (initNum != 0) {
+                CONDITION.await();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字增加1，从" + (initNum++) + "变为" + initNum);
+            CONDITION.signalAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            REENTRANT_LOCK.unlock();
+        }
+    }
+
+    /**
+     * 减少1
+     */
+    private void decrease() {
+        REENTRANT_LOCK.lock();
+        try {
+            // 如果initNum想增加为1，那么此时就必须为0
+            if (initNum != 1) {
+                CONDITION.await();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字减少1，从" + (initNum--) + "变为" + initNum);
+            CONDITION.signalAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            REENTRANT_LOCK.unlock();
+        }
+    }
+
+    /**
+     * 对外测试方法
+     */
+    public void test() {
+        new Thread(() -> {
+            for (int i = 0; i < 5; i++) {
+                increase();
+            }
+        },"byLockIncrease").start();
+        new Thread(() -> {
+            for (int i = 0; i < 5; i++) {
+                decrease();
+            }
+        },"byLockDecrease").start();
+    }
+
+}
+```
+
+### 中级实现（规正）
+
+其实在上述**初级实现**中对于 `wait()` 和 `await()` 的用法是有问题的，即使用 `if` 进行单次判断，但是“初级实现”中仅仅只有两个线程进行通信，并且通信内容极为简单，所以运行之后存在的问题被规避掉了，在 `wait()` 方法中有这样一段描述：
+
+```java
+/**
+ * ...
+ * The current thread must own this object's monitor. The thread releases ownership of this monitor and waits until another thread notifies threads waiting on this object's monitor to wake up either through a call to the notify method or the notifyAll method. The thread then waits until it can re-obtain ownership of the monitor and resumes execution.
+ * As in the one argument version, [interrupts and spurious wakeups are possible, and this method should always be used in a loop] 【中断和虚假唤醒是有可能发生的，所以此方法应始终在while循环中使用】:
+ *    synchronized (obj) {
+ *        while (<condition does not hold>)
+ *            obj.wait();
+ *        ... // Perform action appropriate to condition
+ *    }
+ * 
+ * This method should only be called by a thread that is the owner of this object's monitor. See the notify method for a description of the ways in which a thread can become the owner of a monitor.
+ * ...
+ */
+```
+
+**中断（interrupts）**就是等待的过程中，线程被中断了。
+
+**虚假唤醒（Spurious Wakeup）** 是指在多线程编程中，等待的线程在没有收到 `signal()` 、`signalAll()` 、`notify()` 或 `notifyAll()` 通知的情况下可能被唤醒，或者由于 `wait()` / `await()` 方法在什么地方等待。醒来后就在什么地方继续运行的特点，一些不应该唤醒的线程被唤醒之后执行了不应该执行的代码，也是一种虚假唤醒的表现。虚假唤醒可能是由于操作系统或Java虚拟机的实现原因造成的。在某些情况下，线程可能会在没有明确通知的情况下从等待状态返回，而这并不是因为条件满足。虽然Java虚拟机通常会努力避免虚假唤醒，但我们应该准备好处理这种情况。
+
+接下来会实现一个更高级的例子，在此之前先使用上述错误的方式编写一次，再使用正确的方式编写一次，查看区别，这个例子就是**使用四个线程，即A、B、C、D线程对当前为0的数据进行自增或自减，A、C线程负责自增，B、D线程负责自减，并且A、B线程运行7次，C、D线程运行3次**。
+
+**[错误示例](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_2.java)**如下：
+
+```java
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * 错误示例：
+ * 使用四个线程，即A、B、C、D线程对当前为0的数据进行自增或自减，A、C线程负责自增，B、D线程负责自减，并且A、B线程运行7次，C、D线程运行3次
+ *
+ * @author AntonyCheng
+ */
+public class Demo03_2 {
+
+    public static void main(String[] args) throws InterruptedException {
+        // 测试通过synchronized进行线程通信
+        Demo03_2BySynchronized bySynchronized = new Demo03_2BySynchronized();
+        bySynchronized.test();
+
+        Thread.sleep(1000);
+        System.out.println();
+
+        // 测试通过Lock进行线程通信
+        Demo03_2ByLock byLock = new Demo03_2ByLock();
+        byLock.test();
+    }
+
+}
+
+/**
+ * 通过synchronized关键字实现线程通信类
+ */
+class Demo03_2BySynchronized {
+    /**
+     * 定义当前数值
+     */
+    private static int initNum = 0;
+
+    /**
+     * 增加1
+     */
+    private synchronized void increase() {
+        try {
+            // 如果initNum想增加为1，那么此时就必须为0
+            if (initNum != 0) {
+                wait();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字增加1，从" + (initNum++) + "变为" + initNum);
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 减少1
+     */
+    private synchronized void decrease() {
+        try {
+            // 如果initNum想减少为0，那么此时就必须为1
+            if (initNum != 1) {
+                wait();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字减少1，从" + (initNum--) + "变为" + initNum);
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 对外测试方法
+     */
+    public void test() {
+        new Thread(() -> {
+            for (int i = 0; i < 7; i++) {
+                increase();
+            }
+        },"A").start();
+        new Thread(() -> {
+            for (int i = 0; i < 7; i++) {
+                decrease();
+            }
+        },"B").start();
+        new Thread(() -> {
+            for (int i = 0; i < 3; i++) {
+                increase();
+            }
+        },"C").start();
+        new Thread(() -> {
+            for (int i = 0; i < 3; i++) {
+                decrease();
+            }
+        },"D").start();
+    }
+}
+
+/**
+ * 通过Lock接口实现线程通信类
+ */
+class Demo03_2ByLock {
+
+    /**
+     * 定义当前数值
+     */
+    private static int initNum = 0;
+
+    /**
+     * 定义Lock锁
+     */
+    private static final ReentrantLock REENTRANT_LOCK = new ReentrantLock();
+
+    /**
+     * 定义等待/通知类
+     */
+    private static final Condition CONDITION = REENTRANT_LOCK.newCondition();
+
+    /**
+     * 增加1
+     */
+    private void increase() {
+        REENTRANT_LOCK.lock();
+        try {
+            // 如果initNum想增加为1，那么此时就必须为0
+            if (initNum != 0) {
+                CONDITION.await();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字增加1，从" + (initNum++) + "变为" + initNum);
+            CONDITION.signalAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            REENTRANT_LOCK.unlock();
+        }
+    }
+
+    /**
+     * 减少1
+     */
+    private void decrease() {
+        REENTRANT_LOCK.lock();
+        try {
+            // 如果initNum想增加为1，那么此时就必须为0
+            if (initNum != 1) {
+                CONDITION.await();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字减少1，从" + (initNum--) + "变为" + initNum);
+            CONDITION.signalAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            REENTRANT_LOCK.unlock();
+        }
+    }
+
+    /**
+     * 对外测试方法
+     */
+    public void test() {
+        new Thread(() -> {
+            for (int i = 0; i < 7; i++) {
+                increase();
+            }
+        },"A").start();
+        new Thread(() -> {
+            for (int i = 0; i < 7; i++) {
+                decrease();
+            }
+        },"B").start();
+        new Thread(() -> {
+            for (int i = 0; i < 3; i++) {
+                increase();
+            }
+        },"C").start();
+        new Thread(() -> {
+            for (int i = 0; i < 3; i++) {
+                decrease();
+            }
+        },"D").start();
+    }
+
+}
+```
+
+**[正确示例](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_3.java)**如下：
+
+```java
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * 正确示例：
+ * 使用四个线程，即A、B、C、D线程对当前为0的数据进行自增或自减，A、C线程负责自增，B、D线程负责自减，并且A、B线程运行7次，C、D线程运行3次
+ *
+ * @author AntonyCheng
+ */
+public class Demo03_3 {
+
+    public static void main(String[] args) throws InterruptedException {
+        // 测试通过synchronized进行线程通信
+        Demo03_3BySynchronized bySynchronized = new Demo03_3BySynchronized();
+        bySynchronized.test();
+
+        Thread.sleep(1000);
+        System.out.println();
+
+        // 测试通过Lock进行线程通信
+        Demo03_3ByLock byLock = new Demo03_3ByLock();
+        byLock.test();
+    }
+
+}
+
+/**
+ * 通过synchronized关键字实现线程通信类
+ */
+class Demo03_3BySynchronized {
+    /**
+     * 定义当前数值
+     */
+    private static int initNum = 0;
+
+    /**
+     * 增加1
+     */
+    private synchronized void increase() {
+        try {
+            // 循环判断，如果initNum想增加为1，那么此时就必须为0
+            while (initNum != 0) {
+                wait();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字增加1，从" + (initNum++) + "变为" + initNum);
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 减少1
+     */
+    private synchronized void decrease() {
+        try {
+            // 循环判断，如果initNum想减少为0，那么此时就必须为1
+            while (initNum != 1) {
+                wait();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字减少1，从" + (initNum--) + "变为" + initNum);
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 对外测试方法
+     */
+    public void test() {
+        new Thread(() -> {
+            for (int i = 0; i < 7; i++) {
+                increase();
+            }
+        },"A").start();
+        new Thread(() -> {
+            for (int i = 0; i < 7; i++) {
+                decrease();
+            }
+        },"B").start();
+        new Thread(() -> {
+            for (int i = 0; i < 3; i++) {
+                increase();
+            }
+        },"C").start();
+        new Thread(() -> {
+            for (int i = 0; i < 3; i++) {
+                decrease();
+            }
+        },"D").start();
+    }
+}
+
+/**
+ * 通过Lock接口实现线程通信类
+ */
+class Demo03_3ByLock {
+
+    /**
+     * 定义当前数值
+     */
+    private static int initNum = 0;
+
+    /**
+     * 定义Lock锁
+     */
+    private static final ReentrantLock REENTRANT_LOCK = new ReentrantLock();
+
+    /**
+     * 定义等待/通知类
+     */
+    private static final Condition CONDITION = REENTRANT_LOCK.newCondition();
+
+    /**
+     * 增加1
+     */
+    private void increase() {
+        REENTRANT_LOCK.lock();
+        try {
+            // 循环判断，如果initNum想增加为1，那么此时就必须为0
+            while (initNum != 0) {
+                CONDITION.await();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字增加1，从" + (initNum++) + "变为" + initNum);
+            CONDITION.signalAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            REENTRANT_LOCK.unlock();
+        }
+    }
+
+    /**
+     * 减少1
+     */
+    private void decrease() {
+        REENTRANT_LOCK.lock();
+        try {
+            // 循环判断，如果initNum想增加为1，那么此时就必须为0
+            while (initNum != 1) {
+                CONDITION.await();
+            }
+            System.out.println(Thread.currentThread().getName()+"：当前数字减少1，从" + (initNum--) + "变为" + initNum);
+            CONDITION.signalAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            REENTRANT_LOCK.unlock();
+        }
+    }
+
+    /**
+     * 对外测试方法
+     */
+    public void test() {
+        new Thread(() -> {
+            for (int i = 0; i < 7; i++) {
+                increase();
+            }
+        },"A").start();
+        new Thread(() -> {
+            for (int i = 0; i < 7; i++) {
+                decrease();
+            }
+        },"B").start();
+        new Thread(() -> {
+            for (int i = 0; i < 3; i++) {
+                increase();
+            }
+        },"C").start();
+        new Thread(() -> {
+            for (int i = 0; i < 3; i++) {
+                decrease();
+            }
+        },"D").start();
+    }
+
+}
+```
+
+### 高级实现（拔高）
+
+在“初级实现”和“中级实现”当中，能够看出线程能圆满按照操作系统自行分配的方式执行代码，但是我们现在想要实现一些定制化的功能或者按照一定顺序执行时就要用到一些特殊的手段。
+
+定制化需求如下：**要求在多线程环境下，首先让A线程打印1次”A“，然后让B线程打印2次”B“，再让C线程打印3次”C“，最后让D线程打印4次”D“，上述操作要求循环3次**，最终效果如下：
+
+```cmd
+A:A
+B:BB
+C:CCC
+D:DDDD
+A:A
+B:BB
+C:CCC
+D:DDDD
+A:A
+B:BB
+C:CCC
+D:DDDD
+```
+
+在编码之前先捋捋实现定制化的步骤，首先要明确这里只能使用 Lock 接口实现，因为整个程序之中必定会形成定制化的线程通信机制的设计，普通的 `wait()` 方法和 `notify()` 方法并做到指定某一个线程等待或者唤醒，而在 Lock 接口中可以创建多个 Condition 实例，不同实例的 `await()` 和 `signal()` 方法可以控制不同的线程，此时就需要针对不同线程设计一套标志符号，需求中有 A、B、C、D 四个线程，那么就分别使用 1、2、3、4 去作为四个现成的标识符。
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_4.java)如下：
+
+```java
+package top.sharehome.demo03;
+
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * 要求在多线程环境下，首先让A线程打印1次”A“，然后让B线程打印2次”B“，再让C线程打印3次”C“，最后让D线程打印4次”D“，上述操作要求循环3次
+ *
+ * @author AntonyCheng
+ */
+public class Demo03_4 {
+
+    public static void main(String[] args) {
+        Demo03_4Customized customized = new Demo03_4Customized();
+        customized.test();
+    }
+
+}
+
+/**
+ * 定制化实现类
+ */
+class Demo03_4Customized {
+
+    /**
+     * 定义标志符号，用1、2、3、4代指A、B、C、D线程，初始默认为A线程
+     */
+    private static int mark = 1;
+
+    /**
+     * 定义Lock锁
+     */
+    private static final ReentrantLock LOCK = new ReentrantLock();
+
+    /**
+     * 获取A、B、C、D线程的Condition
+     */
+    private static final Condition CONDITION_A = LOCK.newCondition();
+    private static final Condition CONDITION_B = LOCK.newCondition();
+    private static final Condition CONDITION_C = LOCK.newCondition();
+    private static final Condition CONDITION_D = LOCK.newCondition();
+
+    /**
+     * 编写A、B、C、D四个线程的打印方法
+     */
+    private void printA() {
+        // 获取锁
+        LOCK.lock();
+        try {
+            // 如果标志符号为1，就是A线程，否则让A线程循环等待
+            while (mark != 1) {
+                CONDITION_A.await();
+            }
+            System.out.print(Thread.currentThread().getName() + ": ");
+            for (int i = 0; i < 1; i++) {
+                System.out.print("A");
+            }
+            System.out.println();
+            // 修改为B线程的标志符号
+            mark = 2;
+            // A线程执行完之后唤醒B线程
+            CONDITION_B.signal();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 最后释放锁
+            LOCK.unlock();
+        }
+    }
+
+    private void printB() {
+        // 获取锁
+        LOCK.lock();
+        try {
+            // 如果标志符号为2，就是B线程，否则让B线程循环等待
+            while (mark != 2) {
+                CONDITION_B.await();
+            }
+            System.out.print(Thread.currentThread().getName() + ": ");
+            for (int i = 0; i < 2; i++) {
+                System.out.print("B");
+            }
+            System.out.println();
+            // 修改为C线程的标志符号
+            mark = 3;
+            // B线程执行完之后唤醒C线程
+            CONDITION_C.signal();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 释放锁
+            LOCK.unlock();
+        }
+    }
+
+    private void printC() {
+        // 获取锁
+        LOCK.lock();
+        try {
+            // 如果标志符号为3，就是C线程，否则让C线程循环等待
+            while (mark != 3) {
+                CONDITION_C.await();
+            }
+            System.out.print(Thread.currentThread().getName() + ": ");
+            for (int i = 0; i < 3; i++) {
+                System.out.print("C");
+            }
+            System.out.println();
+            // 修改为D线程的标志符号
+            mark = 4;
+            // C线程执行完之后唤醒D线程
+            CONDITION_D.signal();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 释放锁
+            LOCK.unlock();
+        }
+    }
+
+    private void printD() {
+        // 获取锁
+        LOCK.lock();
+        try {
+            // 如果标志符号为4，就是D线程，否则让D线程循环等待
+            while (mark != 4) {
+                CONDITION_D.await();
+            }
+            System.out.print(Thread.currentThread().getName() + ": ");
+            for (int i = 0; i < 4; i++) {
+                System.out.print("D");
+            }
+            System.out.println();
+            // 修改为A线程的标志符号
+            mark = 1;
+            // D线程执行完之后唤醒A线程
+            CONDITION_A.signal();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 释放锁
+            LOCK.unlock();
+        }
+    }
+
+    /**
+     * 对外测试类
+     */
+    public void test() {
+        for (int i = 0; i < 3; i++) {
+            new Thread(this::printA, "A").start();
+            new Thread(this::printB, "B").start();
+            new Thread(this::printC, "C").start();
+            new Thread(this::printD, "D").start();
+        }
+    }
+
+}
+```
+
+### 多线程编程步骤总结
+
+到此为止就能够总结出高级的多线程编程步骤，也就是最通用的编程步骤：
+
+1. 确定共享资源，并且创建资源类，在该类中创建属性和操作方法。
+2. 在资源类的操作方法中需要做三件事：判断、干活和通知。
+3. 创建多线程，调用上述资源类的操作方法去操作共享资源。
+4. 防止虚假唤醒问题
+
+## 集合的线程安全
+
+### 线程不安全的集合
+
+**线程不安全**指的是当多个并发同时对线程不安全的集合进行修改时会破坏这些集合的数据完整性，我们平时经常使用的集合绝大部分都是线程不安全的集合，例如ArrayList、LinkedList、HashSet、TreeSet、HashMap、TreeMap等都是线程不安全的。
+
+接下来用一个例子来说明为什么上述集合线程不安全，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_1.java)如下：
