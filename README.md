@@ -1335,3 +1335,169 @@ class Demo03_4Customized {
 **线程不安全**指的是当多个并发同时对线程不安全的集合进行修改时会破坏这些集合的数据完整性，我们平时经常使用的集合绝大部分都是线程不安全的集合，例如ArrayList、LinkedList、HashSet、TreeSet、HashMap、TreeMap等都是线程不安全的。
 
 接下来用一个例子来说明为什么上述集合线程不安全，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_1.java)如下：
+
+```java
+package top.sharehome.demo04;
+
+import java.util.ArrayList;
+import java.util.UUID;
+
+/**
+ * 线程不安全集合实例代码
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_1 {
+    /**
+     * 定义集合
+     */
+    private static final ArrayList<String> LIST = new ArrayList<String>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        for (int i = 0; i < 100; i++) {
+            new Thread(() -> {
+                LIST.add(UUID.randomUUID().toString());
+                System.out.println(LIST);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+上述代码可能会产生异常：
+
+```txt
+java.util.ConcurrentModificationException
+	at java.util.ArrayList$Itr.checkForComodification(ArrayList.java:911)
+	at java.util.ArrayList$Itr.next(ArrayList.java:861)
+	at java.util.AbstractCollection.toString(AbstractCollection.java:461)
+	at java.lang.String.valueOf(String.java:2994)
+	at java.io.PrintStream.println(PrintStream.java:821)
+	at top.sharehome.demo04.Demo04_1.lambda$main$0(Demo04_1.java:24)
+	at java.lang.Thread.run(Thread.java:750)
+```
+
+**问题：为什么会出现并发修改异常？**
+
+```java
+/**
+ * Appends the specified element to the end of this list.
+ *
+ * @param e element to be appended to this list
+ * @return <tt>true</tt> (as specified by {@link Collection#add})
+ */
+public boolean add(E e) {
+    ensureCapacityInternal(size + 1);  // Increments modCount!!
+    elementData[size++] = e;
+    return true;
+}
+```
+
+从源码上看 `add()` 方法并没有使用 Lock 接口或者 synchronized 关键字，所以多个线程调用该方法时并不能做到单线程持有操作。
+
+### 处理线程不安全问题示例
+
+#### Vector
+
+Vector 是矢量队列，它是 JDK1.0 版本添加的类。继承于 AbstractList ，实现了 List ,  RandomAccess ，Cloneable 这些接口。Vector 继承了 AbstractList ，实现了 List ；所以，它是一个队列，支持相关的添加、删除、修改、遍历等功能。Vector 实现了 RandmoAccess 接口，即提供了随机访问功能。RandmoAccess 是 java 中用来被 List 实现，为 List 提供快速访问功能的。在 Vector 中，我们即可以通过元素的序号快速获取元素对象；这就是快速随机访问。Vector 实现了 Cloneable 接口，即实现 clone() 函数，它能被克隆。
+
+所以使用 Vector 替代上述示例中的 ArrayList ，就能够构建线程安全的集合，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_2.java)如下：
+
+```java
+import java.util.List;
+import java.util.UUID;
+import java.util.Vector;
+
+/**
+ * Vector集合类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_2 {
+    /**
+     * 定义Vector集合
+     */
+    private static final List<String> LIST = new Vector<String>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        for (int i = 0; i < 100; i++) {
+            new Thread(() -> {
+                LIST.add(UUID.randomUUID().toString());
+                System.out.println(LIST);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+我们进而查看一下源码：
+
+```java
+/**
+ * Appends the specified element to the end of this Vector.
+ *
+ * @param e element to be appended to this Vector
+ * @return {@code true} (as specified by {@link Collection#add})
+ * @since 1.2
+ */
+public synchronized boolean add(E e) {
+    modCount++;
+    ensureCapacityHelper(elementCount + 1);
+    elementData[elementCount++] = e;
+    return true;
+}
+```
+
+发现 Vector 中的 `add()` 方法是被 synchronized 关键字所修饰的。
+
+#### Collections
+
+Collections类是一个处理集合的工具类，其中的 `synchronizedXXX()` 型的方法就可以将一个线程不安全的类变为一个线程安全的类。
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_3.java)如下：
+
+```java
+import java.util.*;
+
+/**
+ * Collections工具类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_3 {
+    /**
+     * 定义线程不安全集合
+     */
+    private static final List<String> LIST = new ArrayList<>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        // 使用Collections工具类对线程不安全的集合实例进行包装
+        // 包装之后得到的集合就是一个线程安全的集合
+        List<String> synchronizedList = Collections.synchronizedList(LIST);
+        for (int i = 0; i < 100; i++) {
+            new Thread(() -> {
+                synchronizedList.add(UUID.randomUUID().toString());
+                System.out.println(synchronizedList);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+#### CopyOnWriteArrayList（重点）
+
+该类所涉及到的一种技术叫做“写时复制”，即如果要对其进行读，就直接读取即可，但是如果要对其写，那么就需要先将其从内存中复制出一份（深拷贝），然后在新的内存区域进行操作，然后再将原内存区域的指针指向新的内存区域。
+
+CopyOnWriteArrayList和

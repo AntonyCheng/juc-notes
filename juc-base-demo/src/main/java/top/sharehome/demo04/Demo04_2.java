@@ -1,19 +1,19 @@
 package top.sharehome.demo04;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Vector;
 
 /**
- * 线程不安全集合实例代码
+ * Vector集合类处理线程不安全问题
  *
  * @author AntonyCheng
  */
-public class Demo04_1 {
+public class Demo04_2 {
     /**
-     * 定义集合
+     * 定义Vector集合
      */
-    private static final List<String> LIST = new ArrayList<String>();
+    private static final List<String> LIST = new Vector<String>();
 
     /**
      * 多个线程同时对集合进行修改
@@ -26,6 +26,5 @@ public class Demo04_1 {
             }, "线程" + i).start();
         }
     }
-
 
 }
