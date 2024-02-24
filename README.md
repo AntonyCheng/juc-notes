@@ -1401,7 +1401,11 @@ public boolean add(E e) {
 
 ### 处理线程不安全问题示例
 
-#### Vector
+#### 对于List的处理
+
+List 仅仅只是集合中的一种，Set 和 Map 的处理方法大同小异，所以到时候只做代码示例，不做详细说明。
+
+##### Vector
 
 Vector 是矢量队列，它是 JDK1.0 版本添加的类。继承于 AbstractList ，实现了 List ,  RandomAccess ，Cloneable 这些接口。Vector 继承了 AbstractList ，实现了 List ；所以，它是一个队列，支持相关的添加、删除、修改、遍历等功能。Vector 实现了 RandmoAccess 接口，即提供了随机访问功能。RandmoAccess 是 java 中用来被 List 实现，为 List 提供快速访问功能的。在 Vector 中，我们即可以通过元素的序号快速获取元素对象；这就是快速随机访问。Vector 实现了 Cloneable 接口，即实现 clone() 函数，它能被克隆。
 
@@ -1458,7 +1462,9 @@ public synchronized boolean add(E e) {
 
 发现 Vector 中的 `add()` 方法是被 synchronized 关键字所修饰的。
 
-#### Collections
+
+
+##### Collections
 
 Collections类是一个处理集合的工具类，其中的 `synchronizedXXX()` 型的方法就可以将一个线程不安全的类变为一个线程安全的类。
 
@@ -1496,8 +1502,290 @@ public class Demo04_3 {
 }
 ```
 
-#### CopyOnWriteArrayList（重点）
+##### CopyOnWriteArrayList
 
 该类所涉及到的一种技术叫做“写时复制”，即如果要对其进行读，就直接读取即可，但是如果要对其写，那么就需要先将其从内存中复制出一份（深拷贝），然后在新的内存区域进行操作，然后再将原内存区域的指针指向新的内存区域。
 
-CopyOnWriteArrayList和
+CopyOnWriteArrayList相当于线程安全的ArrayList。和ArrayList一样，它是个可变数组；但是和ArrayList不同的时，它具有以下特性：
+
+1. 它最适合于具有以下特征的应用程序：List 大小通常保持很小，只读操作远多于可变操作，需要在遍历期间防止线程间的冲突。
+2. 它是线程安全的。
+3. 因为通常需要复制整个基础数组，所以可变操作（add()、set() 和 remove() 等）的开销很大。
+4. 迭代器支持 hasNext() ，next() 等不可变操作，但不支持可变 remove() 等操作。
+5. 使用迭代器进行遍历的速度很快，并且不会与其他线程发生冲突。在构造迭代器时，迭代器依赖于不变的数组快照。
+
+总结一下就是：
+
+- 独占锁效率低：采用读写分离思想解决
+- 写线程获取到锁，其他写线程阻塞
+- 复制思想：
+
+这时候会抛出来一个新的问题，也就是数据不一致的问题。如果写线程还没来得及写会内存，其他的线程就会读到了脏数据，所以这个方案使用的场景应该对实时性要求不高。
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_4.java)如下：
+
+```java
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+/**
+ * 对于List：CopyOnWriteArrayList类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_4 {
+    /**
+     * 定义CopyOnWriteArrayList集合
+     */
+    private static final List<String> LIST = new CopyOnWriteArrayList<>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        for (int i = 0; i < 100; i++) {
+            new Thread(() -> {
+                LIST.add(UUID.randomUUID().toString());
+                System.out.println(LIST);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+**下面从“动态数组”和“线程安全”两个方面进一步对CopyOnWriteArrayList的原理进行说明:**
+
+- “动态数组”机制
+  - 它内部有个“volatile数组”(array)来保持数据。在“添加/修改/删除”数据时，都会新建一个数组，并将更新后的数据拷贝到新建的数组中，最后再将该数组赋值给“volatile数组”, 这就是它叫做CopyOnWriteArrayList的原因。
+  - 由于它在“添加/修改/删除”数据时，都会新建数组，所以涉及到修改数据的操作，CopyOnWriteArrayList效率很低；但是单单只是进行遍历查找的话，效率比较高。
+- “线程安全”机制
+  - 通过volatile和互斥锁来实现的。
+  - 通过“volatile数组”来保存数据的。一个线程读取volatile数组时，总能看到其它线程对该volatile变量最后的写入；就这样，通过volatile提供了“读取到的数据总是最新的”这个机制的保证。
+  - 通过互斥锁来保护数据。在“添加/修改/删除”数据时，会先“获取互斥锁”，再修改完毕之后，先将数据更新到“volatile数组”中，然后再“释放互斥锁”，就达到了保护数据的目的。
+
+#### 对于Set的处理
+
+##### ConcurrentSkipListSet
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_5.java)如下：
+
+```java
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListSet;
+
+/**
+ * 对于Set：ConcurrentSkipListSet集合类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_5 {
+    /**
+     * 定义ConcurrentSkipListSet集合
+     */
+    private static final Set<String> SET = new ConcurrentSkipListSet<String>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        for (int i = 0; i < 100; i++) {
+            new Thread(() -> {
+                SET.add(UUID.randomUUID().toString());
+                System.out.println(SET);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+##### Collections
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_6.java)如下：
+
+```java
+import java.util.*;
+
+/**
+ * 对于Set：Collections工具类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_6 {
+    /**
+     * 定义线程不安全集合
+     */
+    private static final Set<String> SET = new HashSet<String>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        // 使用Collections工具类对线程不安全的集合实例进行包装
+        // 包装之后得到的集合就是一个线程安全的集合
+        Set<String> synchronizedSet = Collections.synchronizedSet(SET);
+        for (int i = 0; i < 100; i++) {
+            new Thread(() -> {
+                synchronizedSet.add(UUID.randomUUID().toString());
+                System.out.println(synchronizedSet);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+##### CopyOnWriteArraySet
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_7.java)如下：
+
+```java
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArraySet;
+
+/**
+ * 对于Set：CopyOnWriteArraySet类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_7 {
+    /**
+     * 定义CopyOnWriteArraySet集合
+     */
+    private static final Set<String> SET = new CopyOnWriteArraySet<String>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        for (int i = 0; i < 100; i++) {
+            new Thread(() -> {
+                SET.add(UUID.randomUUID().toString());
+                System.out.println(SET);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+#### 对于Map的处理
+
+##### HashTable
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_8.java)如下：
+
+```java
+import java.util.*;
+
+/**
+ * 对于Map：HashTable集合类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_8 {
+    /**
+     * 定义Hashtable集合
+     */
+    private static final Map<Integer, String> MAP = new Hashtable<Integer, String>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        for (int i = 0; i < 100; i++) {
+            int key = i;
+            new Thread(() -> {
+                MAP.put(key, UUID.randomUUID().toString());
+                System.out.println(MAP);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+##### ConcurrentHashMap
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_9.java)如下：
+
+```java
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
+
+/**
+ * 对于Map：ConcurrentHashMap集合类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_9 {
+    /**
+     * 定义ConcurrentHashMap集合
+     */
+    private static final Map<Integer, String> MAP = new ConcurrentHashMap<Integer, String>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        for (int i = 0; i < 100; i++) {
+            int key = i;
+            new Thread(() -> {
+                MAP.put(key, UUID.randomUUID().toString());
+                System.out.println(MAP);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+##### Collections
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo04/Demo04_10.java)如下：
+
+```java
+import java.util.*;
+
+/**
+ * 对于Map：Collections工具类处理线程不安全问题
+ *
+ * @author AntonyCheng
+ */
+public class Demo04_10 {
+    /**
+     * 定义线程不安全集合
+     */
+    private static final Map<Integer, String> MAP = new HashMap<Integer, String>();
+
+    /**
+     * 多个线程同时对集合进行修改
+     */
+    public static void main(String[] args) {
+        // 使用Collections工具类对线程不安全的集合实例进行包装
+        // 包装之后得到的集合就是一个线程安全的集合
+        Map<Integer, String> synchronizedMap = Collections.synchronizedMap(MAP);
+        for (int i = 0; i < 100; i++) {
+            int key = i;
+            new Thread(() -> {
+                synchronizedMap.put(key, UUID.randomUUID().toString());
+                System.out.println(synchronizedMap);
+            }, "线程" + i).start();
+        }
+    }
+
+}
+```
+
+### 总结
+
+- 解决 List 的线程安全问题优先使用 ==**CopyOnWriteArrayList**== 和 **Collections.synchronizedList**。
+  - 对于 List 而言，这样的推荐不绝对，如果确定应用场景主要就是读操作大于写操作，次要就是数据实时要求不高，那么毫无疑问选择前者；如果确定应用场景就是写操作远远大于读操作，那么毫无疑问选择后者；其他情况青睐于前者即可。
+- 解决 Set 的线程安全问题优先使用 ==**ConcurrentSkipListSet**== 和 **CopyOnWriteArraySet**。
+- 解决 Map 的线程安全问题优先使用 ==**ConcurrentHashMap**==。

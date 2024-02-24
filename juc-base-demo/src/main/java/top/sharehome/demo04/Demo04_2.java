@@ -5,7 +5,7 @@ import java.util.UUID;
 import java.util.Vector;
 
 /**
- * Vector集合类处理线程不安全问题
+ * 对于List：Vector集合类处理线程不安全问题
  *
  * @author AntonyCheng
  */
