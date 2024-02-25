@@ -2123,3 +2123,90 @@ public class Demo05_3 {
 ```
 
 ### 死锁
+
+**什么是死锁呢？**
+
+就是两个或者两个以上线程在执行过程中，因为争夺资源而造成的一种互相等待的现象，如果没有外力干涉就无法再进行下去。
+
+**产生死锁的原因有哪些？**
+
+1、系统操作不足
+
+2、线程运行的顺序不当
+
+3、资源分配不当
+
+[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo05/Demo05_4.java)如下：
+
+最简单的死锁现象用大白话描述一下就是A线程持有锁A，但是尝试获取锁B，B线程持有锁B，但是尝试获取锁A。
+
+```java
+import java.util.Random;
+
+/**
+ * 模拟死锁示例
+ *
+ * @author AntonyCheng
+ */
+
+public class Demo05_4 {
+
+    /**
+     * 定义两把锁
+     */
+    private static final Object A = new Object();
+    private static final Object B = new Object();
+
+    public static void main(String[] args) {
+        new Thread(() -> {
+            // A线程持有锁A
+            synchronized (A) {
+                System.out.println("A线程拿到锁A，接下来尝试获取锁B...");
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                // A线程尝试获取锁B
+                synchronized (B) {
+                    System.out.println("A线程拿到锁B！");
+                }
+            }
+        }, "A").start();
+        new Thread(() -> {
+            // B线程持有锁B
+            synchronized (B) {
+                System.out.println("B线程拿到锁B，接下来尝试获取锁A...");
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                // B线程尝试获取锁A
+                synchronized (A) {
+                    System.out.println("B线程拿到锁A！");
+                }
+            }
+        }).start();
+    }
+
+}
+```
+
+现在就会产生一个问题，如何验证一个程序发生了死锁呢？
+
+在 JDK 中 bin 目录下包含了两个命令行程序：
+
+![image-20240226002757184](./assets/image-20240226002757184.png)
+
+**`jps -l`**命令就是查看当前系统中运行的 Java 程序及其进程号。
+
+![image-20240226003256592](./assets/image-20240226003256592.png)
+
+**`jstack 进程号`**命令就是查看该进程号对应的 Java 程序堆栈日志。
+
+![image-20240226003330656](./assets/image-20240226003330656.png)
+
+如果在堆栈中打印如下日志，即可表示该进程发生了死锁：
+
+![image-20240226003425295](./assets/image-20240226003425295.png)
