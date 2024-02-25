@@ -221,8 +221,8 @@ public class Demo01_2 {
 synchronized是Java中的关键字，是一种同步锁。而实现同步的基础：Java中的每一个对象都可以作为锁，具体表现为以下3种形式：
 
 - 对于同步代码块，锁是 synchonized 括号里的配置对象。
-- 对于同步普通方法，锁是当前类的 Class 对象。
-- 对于同步静态方法，锁是当前实例的对象。
+- 对于同步普通方法，锁是当前类的实例化对象。
+- 对于同步静态方法，锁是当前类的 Class 对象。
 
 它修饰的对象有几种，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo02/Demo02_1.java)如下：
 
@@ -260,6 +260,8 @@ public static synchronized void syncStaticMethod() {
     System.out.println("同步静态方法...");
 }
 ```
+
+==**注意：**==**当执行代码时，不是同一把锁，就不需要阻塞等待**。举个例子，假设上述示例代码中的 `syncMethod()` 方法和 `syncStaticMethod()` 方法在同一个 Demo 类中，那么前者获取的锁是 Demo 类实例化之后得到的一个 **Demo 对象**，后者获取的锁是 Demo 类自身的 **Class 对象**，当两者同时被不同线程调用时，不会出现阻塞状态，底层原因就是竞争的 CPU 资源不是相同的。
 
 #### Synchronized编程案例
 
@@ -1154,9 +1156,9 @@ C:CCC
 D:DDDD
 ```
 
-在编码之前先捋捋实现定制化的步骤，首先要明确这里只能使用 Lock 接口实现，因为整个程序之中必定会形成定制化的线程通信机制的设计，普通的 `wait()` 方法和 `notify()` 方法并做到指定某一个线程等待或者唤醒，而在 Lock 接口中可以创建多个 Condition 实例，不同实例的 `await()` 和 `signal()` 方法可以控制不同的线程，此时就需要针对不同线程设计一套标志符号，需求中有 A、B、C、D 四个线程，那么就分别使用 1、2、3、4 去作为四个现成的标识符。
+在编码之前先捋捋实现定制化的步骤，首先要明确这里推荐使用 Lock 接口实现，因为整个程序之中必定会形成定制化的线程通信机制的设计，在 Lock 接口中可以直接创建多个 Condition 实例，不同实例的 `await()` 和 `signal()` 方法可以控制不同的线程，此时就需要针对不同线程设计一套标志符号，需求中有 A、B、C、D 四个线程，那么就分别使用 1、2、3、4 去作为四个现成的标识符。
 
-[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_4.java)如下：
+Lock接口[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_4.java)如下：
 
 ```java
 package top.sharehome.demo03;
@@ -1319,6 +1321,133 @@ class Demo03_4Customized {
 }
 ```
 
+当然也可以使用 synchronized 关键字去完成这项需求，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_5.java)如下：
+
+```java
+/**
+ * 要求在多线程环境下，首先让A线程打印1次”A“，然后让B线程打印2次”B“，再让C线程打印3次”C“，最后让D线程打印4次”D“，上述操作要求循环3次
+ *
+ * @author AntonyCheng
+ */
+public class Demo03_5 {
+
+    public static void main(String[] args) {
+        Demo03_5Customized customized = new Demo03_5Customized();
+        customized.test();
+    }
+
+}
+
+/**
+ * 定制化实现类
+ */
+class Demo03_5Customized {
+
+    /**
+     * 定义标志符号，用1、2、3、4代指A、B、C、D线程，初始默认为A线程
+     */
+    private static int mark = 1;
+
+    /**
+     * 编写A、B、C、D四个线程的打印方法
+     */
+    private synchronized void printA() {
+        try {
+            // 如果标志符号为1，就是A线程，否则让A线程循环等待
+            while (mark != 1) {
+                wait();
+            }
+            System.out.print(Thread.currentThread().getName() + ": ");
+            for (int i = 0; i < 1; i++) {
+                System.out.print("A");
+            }
+            System.out.println();
+            // 修改为B线程的标志符号
+            mark = 2;
+            // B线程执行完之后唤醒所有线程
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private synchronized void printB() {
+        try {
+            // 如果标志符号为2，就是B线程，否则让B线程循环等待
+            while (mark != 2) {
+                wait();
+            }
+            System.out.print(Thread.currentThread().getName() + ": ");
+            for (int i = 0; i < 2; i++) {
+                System.out.print("B");
+            }
+            System.out.println();
+            // 修改为C线程的标志符号
+            mark = 3;
+            // B线程执行完之后唤醒所有线程
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private synchronized void printC() {
+        try {
+            // 如果标志符号为3，就是C线程，否则让C线程循环等待
+            while (mark != 3) {
+                wait();
+            }
+            System.out.print(Thread.currentThread().getName() + ": ");
+            for (int i = 0; i < 3; i++) {
+                System.out.print("C");
+            }
+            System.out.println();
+            // 修改为D线程的标志符号
+            mark = 4;
+            // C线程执行完之后唤醒所有线程
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private synchronized void printD() {
+        try {
+            // 如果标志符号为4，就是D线程，否则让D线程循环等待
+            while (mark != 4) {
+                wait();
+            }
+            System.out.print(Thread.currentThread().getName() + ": ");
+            for (int i = 0; i < 4; i++) {
+                System.out.print("D");
+            }
+            System.out.println();
+            // 修改为A线程的标志符号
+            mark = 1;
+            // D线程执行完之后唤醒所有线程
+            notifyAll();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 对外测试类
+     */
+    public void test() {
+        for (int i = 0; i < 3; i++) {
+            new Thread(this::printA, "A").start();
+            new Thread(this::printB, "B").start();
+            new Thread(this::printC, "C").start();
+            new Thread(this::printD, "D").start();
+        }
+    }
+
+}
+```
+
+弊端：这种方法实现起来会更加简单，但是每次打印结束之后都要唤醒所有的等待线程，势必会造成 CPU 资源的无效占用，只达到了逻辑层面的定制化，但是没能达到编码层面的定制化。
+
 ### 多线程编程步骤总结
 
 到此为止就能够总结出高级的多线程编程步骤，也就是最通用的编程步骤：
@@ -1461,8 +1590,6 @@ public synchronized boolean add(E e) {
 ```
 
 发现 Vector 中的 `add()` 方法是被 synchronized 关键字所修饰的。
-
-
 
 ##### Collections
 
@@ -1789,3 +1916,210 @@ public class Demo04_10 {
   - 对于 List 而言，这样的推荐不绝对，如果确定应用场景主要就是读操作大于写操作，次要就是数据实时要求不高，那么毫无疑问选择前者；如果确定应用场景就是写操作远远大于读操作，那么毫无疑问选择后者；其他情况青睐于前者即可。
 - 解决 Set 的线程安全问题优先使用 ==**ConcurrentSkipListSet**== 和 **CopyOnWriteArraySet**。
 - 解决 Map 的线程安全问题优先使用 ==**ConcurrentHashMap**==。
+
+## 多线程锁
+
+### 公平锁&非公平锁
+
+介绍一下现象：我们在多线程编程时，加锁后经常会发现其中一个线程会长时间占据 CPU 资源，如果代码逻辑简单，很有可能出现一个线程就直接全部完成的现象，这种锁就是非公平锁，而以前所提到的 synchronized 关键字和 Lock 接口默认上锁均为非公平锁。如果要实现公平锁，简单的方法就是实例化 ReentrantLock 锁时，修改构造器参数为 `true` 即可。
+
+非公平锁[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo05/Demo05_1.java)如下：
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * 非公平锁演示
+ *
+ * @author AntonyCheng
+ */
+
+public class Demo05_1 {
+
+    public static void main(String[] args) {
+        Demo05_1NoFairLock noFairLock = new Demo05_1NoFairLock();
+        new Thread(()->{
+            while (true){
+                noFairLock.method();
+            }
+        }, "Thread01").start();
+        new Thread(()->{
+            while (true){
+                noFairLock.method();
+            }
+        }, "Thread02").start();
+        new Thread(()->{
+            while (true){
+                noFairLock.method();
+            }
+        }, "Thread03").start();
+    }
+
+}
+
+/**
+ * 非公平锁资源类，将默认为1的数字自增为15
+ */
+class Demo05_1NoFairLock {
+
+    /**
+     * 定义默认数字
+     */
+    private int defaultNum = 1;
+
+    /**
+     * 定义一个ReentrantLock锁，默认就是非公平锁
+     */
+    private final ReentrantLock LOCK = new ReentrantLock();
+
+    /**
+     * 多线程方法
+     */
+    public void method() {
+        LOCK.lock();
+        try {
+            if (defaultNum < 15) {
+                System.out.println(Thread.currentThread().getName() + "：现在是" + (defaultNum++) + ",自增之后是" + defaultNum);
+            }
+        } finally {
+            LOCK.unlock();
+        }
+    }
+
+}
+```
+
+公平锁[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo05/Demo05_2.java)如下：
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * 公平锁演示
+ *
+ * @author AntonyCheng
+ */
+
+public class Demo05_2 {
+
+    public static void main(String[] args) {
+        Demo05_2FairLock fairLock = new Demo05_2FairLock();
+        new Thread(() -> {
+            while (true) {
+                fairLock.method();
+            }
+        }, "Thread01").start();
+        new Thread(() -> {
+            while (true) {
+                fairLock.method();
+            }
+        }, "Thread02").start();
+        new Thread(() -> {
+            while (true) {
+                fairLock.method();
+            }
+        }, "Thread03").start();
+    }
+
+}
+
+/**
+ * 公平锁资源类，将默认为1的数字自增为30
+ */
+class Demo05_2FairLock {
+
+    /**
+     * 定义默认数字
+     */
+    private int defaultNum = 1;
+
+    /**
+     * 定义一个ReentrantLock锁，添加true构造参数，即可创建一个公平锁
+     */
+    private final ReentrantLock LOCK = new ReentrantLock(true);
+
+    /**
+     * 多线程方法
+     */
+    public void method() {
+        LOCK.lock();
+        try {
+            if (defaultNum < 30) {
+                System.out.println(Thread.currentThread().getName() + "：现在是" + (defaultNum++) + ",自增之后是" + defaultNum);
+            }
+        } finally {
+            LOCK.unlock();
+        }
+    }
+
+}
+```
+
+### 可重入锁
+
+先介绍一下现象：在多线程编程中，我们可能有一个疑问，就是如果在有锁状态下再进行获取锁的操作，这个锁能不能获取到呢？这里就引入了可重入锁的概念，这个锁能在有锁状态下多次获取，那么这个锁就是一个可重入锁，否则就不是可重入锁，而以前所提到的 synchronized 关键字和 Lock 接口默认上锁均为可重入锁，可重入锁还有一个别称叫做递归锁，就是允许在有某一把锁的情况下不断获取这把锁。[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo05/Demo05_3.java)如下：
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * 可重入锁示例代码
+ *
+ * @author AntonyCheng
+ */
+
+public class Demo05_3 {
+
+    public static void main(String[] args) {
+        synchronizedMethod();
+        lockMethod();
+    }
+
+    /**
+     * 用synchronized关键字进行演示
+     */
+    public static void synchronizedMethod() {
+        // 定义锁类
+        Object obj = new Object();
+
+        // 进行三层加锁操作
+        synchronized (obj) {
+            System.out.println("外层");
+            synchronized (obj) {
+                System.out.println("中层");
+                synchronized (obj) {
+                    System.out.println("内层");
+                }
+            }
+        }
+    }
+
+    /**
+     * 用Lock接口进行演示
+     */
+    public static void lockMethod() {
+        ReentrantLock lock = new ReentrantLock();
+        lock.lock();
+        try {
+            System.out.println("外层");
+            lock.lock();
+            try {
+                System.out.println("中层");
+                lock.lock();
+                try {
+                    System.out.println("内层");
+                } finally {
+                    lock.unlock();
+                }
+            } finally {
+                lock.unlock();
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+}
+```
+
+### 死锁
