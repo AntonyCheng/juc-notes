@@ -2210,3 +2210,165 @@ public class Demo05_4 {
 如果在堆栈中打印如下日志，即可表示该进程发生了死锁：
 
 ![image-20240226003425295](./assets/image-20240226003425295.png)
+
+## Callable&Future接口
+
+### Callable接口
+
+目前我们知道有两种创建线程的方法，一种是通过创建Thread类，另一种是通过使用 Runnable 创建线程，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo06/Demo06_1.java)如下：
+
+```java
+/**
+ * 使用Thread和Runnable创建线程示例代码
+ *
+ * @author AntonyCheng
+ */
+
+public class Demo06_1 {
+
+    public static void main(String[] args) {
+        // 1、通过Thread类匿名创建线程
+        new Thread(() -> {
+            System.out.println(Thread.currentThread().getName() + "：通过Thread类创建线程...");
+        }).start();
+        // 2、实现Runnable接口创建线程
+        Demo06_1Runnable runnable = new Demo06_1Runnable();
+        new Thread(runnable).start();
+    }
+
+}
+
+/**
+ * 实现Runnable接口
+ */
+class Demo06_1Runnable implements Runnable {
+    @Override
+    public void run() {
+        System.out.println(Thread.currentThread().getName() + "：实现Runnable接口创建线程...");
+    }
+}
+```
+
+从上面可以看出，这两种方案其实本质是一样的，无非就是函数是否是匿名的形式而已，当然匿名形式看起来更加清爽，这里提到 Runnable 接口非匿名形式就是为了对比 Callable 接口，Runnable 这样的创建方式缺少的一项功能是：当线程终止时（即 `start()` 完成时），我们无法使线程返回结果。为了支持此功能，Java 中提供了 Callable 接口。
+
+**Callable接口的特点如下：**
+
+- 为了实现 Runnable，需要实现不返回任何内容的 `run()` 方法，而对于 Callable ，需要实现在完成时返回结果的 `call()` 方法。
+- `call()` 方法可以引发异常，而 `run()` 则不能。
+- 为实现 Callable 而必须重写 `call()` 方法。
+
+从上面的示例可以看出 Runnable 需要借助 Thread 类进行多线程编码，但是 Thread 类的构造方法并没有 Callable 类型的构造参数，这里就说明 Callable 并不能直接借助 Thread 类完成多线程编码，那如果想让 Callable 和 Thread 有关系，就需要借助一个中间人：FutureTask 类，在认识它之前先来接触一下 Future 接口。
+
+### Future接口
+
+当 `call()` 方法完成时，结果必须存储在主线程已知的对象中，以便主线程可以知道该线程返回的结果。为此，可以使用 Future 对象。
+
+将 Future 视为保存结果的对象，它可能暂时不保存结果，但将来会保存（一旦 Callable 返回）。Future 基本上是主线程可以跟踪进度以及其他线程的结果的一种方式。要实现此接口，必须重写5种方法如下:
+
+- `boolean cancel(boolean mayInterruptIfRunning);` 用于停止任务，如果尚未启动，它将停止任务。如果已启动，则仅在mayInterrupt为true时才会中断任务。
+- `boolean isCancelled();` 判断任务是否已经停止。
+- `boolean isDone();` 判断任务是否已经完成。
+- `V get();` 如果任务完成，它将立即返回结果，否则将等待任务完成，然后返回结果。
+- `V get(long timeout, TimeUnit unit);` 在一定时间内等待任务进行，但是超过时间任务没有完成，就会抛出异常。
+
+可以看到 Callable 和 Future 做两件事，Callable 与 Runnable 类似，因为它封装了要在另一个线程上运行的任务，而 Future 用于存储从另一个线程获得的结果。实际上，Future 也可以与 Runnable 一起使用。
+
+**小节一下**：要创建线程，需要 Runnable。为了获得结果，需要 Future。
+
+### FutureTask类
+
+FutureTask 类不仅是 Future 接口的一个实现，而且还是 Runnable 接口的一个实现类，在此基础上它还有一个构造参数为 Callable 类型的构造器，所以它就能起到前面提到的中间人的作用。
+
+其实学习 Callable 和 Future 接口的目的也就是为了递进式掌握 FutureTask 类的使用，**下面就来捋捋 FutureTask 的使用核心原理**：
+
+- 当主线程将来需要时，就可以通过 FutureTask 对象获得后台作业的计算结果或者执行状态。
+- 一般FutureTask多用于耗时的计算，主线程可以在完成自己的任务后，再去获取结果。
+- 仅在计算完成时才能检索结果；如果计算尚未完成，则阻塞 `get()` 方法。
+- 一旦计算完成，就不能再重新开始或取消计算。
+- `get()` 方法而获取结果只有在计算完成时获取，否则会一直阻塞直到任务转入完成状态，然后会返回结果或者抛出异常。
+- `get()` 只计算一次，因此 `get()` 方法放到最后。
+
+FutureTask [示例代码](./juc-base-demo/src/main/java/top/sharehome/demo06/Demo06_2.java)如下：
+
+```java
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
+
+/**
+ * Callable + FutureTask 示例代码
+ *
+ * @author AntonyCheng
+ */
+
+public class Demo06_2 {
+
+    public static void main(String[] args) throws Exception {
+        // 创建FutureTask任务类
+        FutureTask<Integer> futureTask = new FutureTask<>(new Demo06_2Callable());
+        // 启动另一条线程执行任务
+        new Thread(futureTask).start();
+        // 轮询任务是否结束，轮询周期为0.5s
+        while (!futureTask.isDone()){
+            Thread.sleep(500);
+            System.out.println("futureTask正在执行...");
+        }
+        // 监控到任务已经结束，即获取最终返回值
+        System.out.println("futureTask已结束，状态码为：" + futureTask.get());
+    }
+
+}
+
+/**
+ * 实现Callable接口，泛型就表示返回值的类型
+ */
+class Demo06_2Callable implements Callable<Integer> {
+
+    @Override
+    public Integer call() throws Exception {
+        System.out.println(Thread.currentThread().getName() + "：实现Callable接口创建线程...");
+        // 假设该计算耗时3s
+        Thread.sleep(3000);
+        // 一般正常返回响应状态码为200
+        return 200;
+    }
+
+}
+```
+
+前面在创建现成的时候介绍到过两种形式：匿名和非匿名，在 Java 中，无论是 Runnable 还是 Callable，都是函数式接口，即都可以使用 Lambda 表达式进行匿名书写，所以以上代码改写后的[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo06/Demo06_3.java)如下：
+
+```java
+package top.sharehome.demo06;
+
+import java.util.concurrent.FutureTask;
+
+/**
+ * Callable + FutureTask 匿名形式示例代码
+ *
+ * @author AntonyCheng
+ */
+
+public class Demo06_3 {
+
+    public static void main(String[] args) throws Exception {
+        // 定义FutureTask对象
+        FutureTask<Integer> futureTask = null;
+        // 启动另一条线程执行任务
+        new Thread(futureTask = new FutureTask<>(() -> {
+            System.out.println(Thread.currentThread().getName() + "：实现Callable接口创建线程...");
+            // 假设该计算耗时3s
+            Thread.sleep(3000);
+            // 一般正常返回响应状态码为200
+            return 200;
+        })).start();
+        // 轮询任务是否结束，轮询周期为0.5s，如果没有while轮询任务，那么到get()方法时就会阻塞
+        while (!futureTask.isDone()) {
+            Thread.sleep(500);
+            System.out.println("futureTask正在执行...");
+        }
+        // 监控到任务已经结束，即获取最终返回值
+        System.out.println("futureTask已结束，状态码为：" + futureTask.get());
+    }
+
+}
+```
