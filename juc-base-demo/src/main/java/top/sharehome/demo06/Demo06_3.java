@@ -1,5 +1,6 @@
 package top.sharehome.demo06;
 
+import java.time.LocalDateTime;
 import java.util.concurrent.FutureTask;
 
 /**
@@ -24,10 +25,10 @@ public class Demo06_3 {
         // 轮询任务是否结束，轮询周期为0.5s，如果没有while轮询任务，那么到get()方法时就会阻塞
         while (!futureTask.isDone()) {
             Thread.sleep(500);
-            System.out.println("futureTask正在执行...");
+            System.out.println(LocalDateTime.now() + " ==> futureTask正在执行...");
         }
         // 监控到任务已经结束，即获取最终返回值
-        System.out.println("futureTask已结束，状态码为：" + futureTask.get());
+        System.out.println(LocalDateTime.now() + " ==> futureTask已结束，状态码为：" + futureTask.get());
     }
 
 }

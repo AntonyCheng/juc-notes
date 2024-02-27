@@ -1,7 +1,5 @@
 package top.sharehome.demo05;
 
-import java.util.Random;
-
 /**
  * 模拟死锁示例
  *

@@ -180,6 +180,10 @@ public class Demo01_1 {
 }
 ```
 
+运行结果如下：
+
+![image-20240227103924700](./assets/image-20240227103924700.png)
+
 如果除主线程外没有用户线程，且都是守护线程，即使守护线程还在允许，JVM依旧结束，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo01/Demo01_2.java)如下：
 
 ```java
@@ -211,6 +215,10 @@ public class Demo01_2 {
 
 }
 ```
+
+运行结果如下：
+
+![image-20240227104002921](./assets/image-20240227104002921.png)
 
 ## Lock接口
 
@@ -336,6 +344,10 @@ class Ticket {
 
 }
 ```
+
+运行结果如下：
+
+![image-20240227104503298](./assets/image-20240227104503298.png)
 
 如果一个代码块被synchronized修饰了，当一个线程获取了对应的锁，并执行该代码块时，其他线程便只能一直等待，等待获取锁的线程释放锁，而这里获取锁的线程释放锁只会有两种情况：
 
@@ -494,6 +506,10 @@ public class Demo02_4 {
 }
 ```
 
+运行结果如下：
+
+![image-20240227104647380](./assets/image-20240227104647380.png)
+
 对于`ReentrantReadWriteLock.ReadLock` （读锁）和`ReentrantReadWriteLock.WriteLock` （写锁）还有以下注意事项：
 
 - 如果有一个线程已经占用了读锁，则此时其他线程如果要申请写锁，则申请写锁的线程会一直等待释放读锁。
@@ -576,6 +592,9 @@ class LockTicket {
 
 }
 ```
+
+运行结果如下：
+![image-20240227105031642](./assets/image-20240227105031642.png)
 
 #### 小结（重点）
 
@@ -740,6 +759,10 @@ class Demo03_1ByLock {
 
 }
 ```
+
+运行结果如下：
+
+![image-20240227105204719](./assets/image-20240227105204719.png)
 
 ### 中级实现（规正）
 
@@ -951,6 +974,9 @@ class Demo03_2ByLock {
 }
 ```
 
+运行结果如下：
+![image-20240227105835612](./assets/image-20240227105835612.png)
+
 **[正确示例](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_3.java)**如下：
 
 ```java
@@ -1134,6 +1160,10 @@ class Demo03_3ByLock {
 
 }
 ```
+
+运行结果如下：
+
+![image-20240227110009778](./assets/image-20240227110009778.png)
 
 ### 高级实现（拔高）
 
@@ -1321,6 +1351,10 @@ class Demo03_4Customized {
 }
 ```
 
+运行结果如下：
+
+![image-20240227110110002](./assets/image-20240227110110002.png)
+
 当然也可以使用 synchronized 关键字去完成这项需求，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo03/Demo03_5.java)如下：
 
 ```java
@@ -1445,6 +1479,10 @@ class Demo03_5Customized {
 
 }
 ```
+
+运行结果如下：
+
+![image-20240227110140793](./assets/image-20240227110140793.png)
 
 弊端：这种方法实现起来会更加简单，但是每次打印结束之后都要唤醒所有的等待线程，势必会造成 CPU 资源的无效占用，只达到了逻辑层面的定制化，但是没能达到编码层面的定制化。
 
@@ -1989,6 +2027,10 @@ class Demo05_1NoFairLock {
 }
 ```
 
+运行结果如下：
+
+![image-20240227110355579](./assets/image-20240227110355579.png)
+
 公平锁[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo05/Demo05_2.java)如下：
 
 ```java
@@ -2054,6 +2096,10 @@ class Demo05_2FairLock {
 
 }
 ```
+
+运行结果如下：
+
+![image-20240227110446234](./assets/image-20240227110446234.png)
 
 ### 可重入锁
 
@@ -2121,6 +2167,10 @@ public class Demo05_3 {
 
 }
 ```
+
+运行结果如下：
+
+![image-20240227110538187](./assets/image-20240227110538187.png)
 
 ### 死锁
 
@@ -2193,6 +2243,10 @@ public class Demo05_4 {
 }
 ```
 
+运行结果如下：
+
+![image-20240227110620625](./assets/image-20240227110620625.png)
+
 现在就会产生一个问题，如何验证一个程序发生了死锁呢？
 
 在 JDK 中 bin 目录下包含了两个命令行程序：
@@ -2249,6 +2303,10 @@ class Demo06_1Runnable implements Runnable {
 }
 ```
 
+运行结果如下：
+
+![image-20240227110744817](./assets/image-20240227110744817.png)
+
 从上面可以看出，这两种方案其实本质是一样的，无非就是函数是否是匿名的形式而已，当然匿名形式看起来更加清爽，这里提到 Runnable 接口非匿名形式就是为了对比 Callable 接口，Runnable 这样的创建方式缺少的一项功能是：当线程终止时（即 `start()` 完成时），我们无法使线程返回结果。为了支持此功能，Java 中提供了 Callable 接口。
 
 **Callable接口的特点如下：**
@@ -2291,6 +2349,7 @@ FutureTask 类不仅是 Future 接口的一个实现，而且还是 Runnable 接
 FutureTask [示例代码](./juc-base-demo/src/main/java/top/sharehome/demo06/Demo06_2.java)如下：
 
 ```java
+import java.time.LocalDateTime;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 
@@ -2308,12 +2367,12 @@ public class Demo06_2 {
         // 启动另一条线程执行任务
         new Thread(futureTask).start();
         // 轮询任务是否结束，轮询周期为0.5s
-        while (!futureTask.isDone()){
+        while (!futureTask.isDone()) {
             Thread.sleep(500);
-            System.out.println("futureTask正在执行...");
+            System.out.println(LocalDateTime.now() + " ==> futureTask正在执行...");
         }
         // 监控到任务已经结束，即获取最终返回值
-        System.out.println("futureTask已结束，状态码为：" + futureTask.get());
+        System.out.println(LocalDateTime.now() + " ==> futureTask已结束，状态码为：" + futureTask.get());
     }
 
 }
@@ -2335,11 +2394,13 @@ class Demo06_2Callable implements Callable<Integer> {
 }
 ```
 
+运行结果如下：
+
+![image-20240227110940138](./assets/image-20240227110940138.png)
+
 前面在创建现成的时候介绍到过两种形式：匿名和非匿名，在 Java 中，无论是 Runnable 还是 Callable，都是函数式接口，即都可以使用 Lambda 表达式进行匿名书写，所以以上代码改写后的[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo06/Demo06_3.java)如下：
 
 ```java
-package top.sharehome.demo06;
-
 import java.util.concurrent.FutureTask;
 
 /**
@@ -2372,3 +2433,168 @@ public class Demo06_3 {
 
 }
 ```
+
+运行结果如下：
+
+![image-20240227111219635](./assets/image-20240227111219635.png)
+
+## JUC三大辅助类
+
+JUC中提供了三种常用的辅助类，通过这些辅助类可以很好的解决线程数量过多时Lock锁的频繁操作。这三种辅助类为：
+
+- CountDownLatch：减少计数。
+- CyclicBarrier：循环栅栏。
+- Semaphore：信号灯。
+
+### 减少计数CountDownLatch
+
+CountDownLatch 类可以设置一个计数器，然后通过 `countDown()` 方法来进行减 1 的操作，使用 `await()` 方法等待计数器不大于0，然后继续执行 `await()` 方法之后的语句。
+
+- CountDownLatch主要有两个方法，当一个或多个线程调用 `await()` 方法时，这些线程会阻塞。
+- 其它线程调用 `countDown()` 方法会将计数器减 1 （调用 `countDown()` 方法的线程不会阻塞）。
+- 当计数器的值变为 0 时，因 `await()` 方法阻塞的线程会被唤醒，继续执行。
+
+下面假设一个场景：6个同学陆续离开教室后值班同学才可以关门，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo07/Demo07_1.java)如下：
+
+```java
+import java.util.concurrent.CountDownLatch;
+
+/**
+ * 辅助类：减少计数CountDownLatch
+ *
+ * @author AntonyCheng
+ */
+public class Demo07_1 {
+
+    /**
+     * 6个同学陆续离开教室后值班同学才可以关门
+     */
+    public static void main(String[] args) {
+        // 定义数值为6的计数器
+        CountDownLatch countDownLatch = new CountDownLatch(6);
+
+        // 模拟6名同学离开
+        for (int i = 0; i < 6; i++) {
+            new Thread(() -> {
+                System.out.println(Thread.currentThread().getName() + "：已经离开");
+                countDownLatch.countDown();
+            }, "同学" + (i + 1)).start();
+        }
+
+        // 模拟关门操作
+        try {
+            // 等待6名同学离开
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println(Thread.currentThread().getName()+"：负责关门");
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240227111300523](./assets/image-20240227111300523.png)
+
+### 循环栅栏CyclicBarrier
+
+CyclicBarrier 看英文单词可以看出大概就是循环阻塞的意思，在使用中 CyclicBarrier 的构造方法第一个参数是目标障碍数，每次执行 `await()` 方法，障碍数就会加 1，如果达到了目标障碍数，才会执行 `await()` 之后的语句。可以将 CyclicBarrier 理解为加 1 操作。
+
+循环栅栏的形式和减少计数的形式是相反的，下面假设一个场景：集齐 7 课龙珠才能召唤神龙，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo07/Demo07_2.java)如下：
+
+```java
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+
+/**
+ * 辅助类：循环栅栏CyclicBarrier
+ *
+ * @author AntonyCheng
+ */
+public class Demo07_2 {
+
+    /**
+     * 集齐7颗龙珠才能召唤神龙
+     */
+    public static void main(String[] args) {
+        // 定义域值为7的循环栅栏，并且达到域值之后召唤神龙
+        CyclicBarrier cyclicBarrier = new CyclicBarrier(7, () -> {
+            System.out.println(Thread.currentThread().getName() + "：龙珠收集完成，就地召唤神龙！");
+        });
+
+        // 模拟找到七个龙珠
+        for (int i = 0; i < 7; i++) {
+            new Thread(() -> {
+                try {
+                    System.out.println(Thread.currentThread().getName() + "：收集到龙珠！");
+                    // 等待七颗龙珠全部收集完
+                    cyclicBarrier.await();
+                } catch (InterruptedException | BrokenBarrierException e) {
+                    throw new RuntimeException(e);
+                }
+            }, "第" + (i + 1) + "个人").start();
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240227111322962](./assets/image-20240227111322962.png)
+
+这个可以看成学生 100 米体测，假设跑到有 10 条，学生有 100 人，那么显而易见需要十轮就能全部体测完，那么整个“循环栅栏”过程就可以看成每轮开始前 10 个人陆续排队的过程，每轮需要有十个人才能开跑。
+
+**注意：**CyclicBarrier 中达到域值后需要的代码会运行在结果刚好是域值要求的那个线程上。
+
+### 信号灯Semaphore
+
+Semaphore 的构造方法中传入的第一个参数是最大信号量（可以看成最大线程池），每个信号量初始化为一个最多只能分发一个许可证。使用 `acquire()` 方法获得许可证，`release()` 方法释放许可。
+
+下面假设一个场景：抢车位，6 部汽车，3 个停车位，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo07/Demo07_3.java)如下：
+
+```java
+import java.time.LocalDateTime;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Semaphore;
+
+/**
+ * 辅助类：信号灯Semaphore
+ *
+ * @author AntonyCheng
+ */
+public class Demo07_3 {
+
+    /**
+     * 抢车位，6部汽车，3个停车位
+     */
+    public static void main(String[] args) {
+        // 定义信号灯，模拟出3个停车位
+        Semaphore semaphore = new Semaphore(3);
+
+        // 模拟6辆汽车去抢车位
+        for (int i = 0; i < 6; i++) {
+            new Thread(()->{
+                try {
+                    semaphore.acquire();
+                    System.out.println(LocalDateTime.now()+ " ==> " +Thread.currentThread().getName()+"：抢到车位，停两秒再走...");
+                    Thread.sleep(2000);
+                    System.out.println(LocalDateTime.now()+ " ==> " +Thread.currentThread().getName()+"：走了走了!");
+                    semaphore.release();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            },"第"+(i+1)+"辆车").start();
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240227112552962](./assets/image-20240227112552962.png)
+
