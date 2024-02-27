@@ -2598,3 +2598,288 @@ public class Demo07_3 {
 
 ![image-20240227112552962](./assets/image-20240227112552962.png)
 
+## 读写锁
+
+### 前置知识
+
+#### 悲观锁&乐观锁
+
+##### 悲观锁
+
+总是假设最坏的情况，每次去拿数据的时候都认为别人会修改，所以每次在拿数据的时候都会上锁，这样别人想拿这个数据就会阻塞直到它拿到锁（**共享资源每次只给一个线程使用，其它线程阻塞，用完后再把资源转让给其它线程**）。
+
+##### 乐观锁
+
+总是假设最好的情况，每次去拿数据的时候都认为别人不会修改，所以不会上锁，但是在更新的时候会判断一下在此期间别人有没有去更新这个数据，可以使用版本号机制和CAS算法实现。**乐观锁适用于多读的应用类型，这样可以提高吞吐量**，像数据库提供的类似于**write_condition机制**，其实都是提供的乐观锁。
+
+- **版本号机制**：一般是在数据表中加上一个数据版本号 version 字段，表示数据被修改的次数，当数据被修改时，version 值会加一。当线程 A 要更新数据值时，在读取数据的同时也会读取 version 值，在提交更新时，若刚才读取到的 version 值为当前数据库中的 version 值相等时才更新，否则重试更新操作，直到更新成功。
+
+- **CAS算法**：即**compare and swap（比较与交换）**，是一种有名的**无锁算法**。无锁并发编程，即不使用锁的情况下实现多线程之间的变量同步，也就是在没有线程被阻塞的情况下实现变量的同步，所以也叫非阻塞同步（Non-blocking Synchronization）。**CAS算法**涉及到三个操作数：
+
+  1. 需要读写的内存值 V
+  2. 进行比较的值 A
+  3. 拟写入的新值 B
+
+  当且仅当 V 的值等于 A 时，CAS 通过原子方式用新值 B 来更新 V 的值，否则不会执行任何操作（比较和替换是一个原子操作）。一般情况下是一个**自旋操作**，即**不断的重试**，所以以CAS算法为基础的乐观锁也叫做**自旋锁**。
+
+  ![image-20220424185352272](./assets/image-20220424185352272.png)
+
+#### 独占锁&共享锁
+
+##### 独占锁
+
+独占锁也叫排他锁，**是指该锁一次只能被一个线程所持有**。如果线程 T 对数据 A 加上独占锁后，则其他线程不能再对A加任何类型的锁。获得独占锁的线程即能读数据又能修改数据。
+
+##### 共享锁
+
+共享锁**是指该锁可被多个线程所持有**。如果线程T对数据 A 加上共享锁后，则其他线程只能对 A 再加共享锁，不能加独占锁。获得共享锁的线程只能读数据，不能修改数据。
+
+#### 行锁&表锁
+
+行锁和表锁的概念出现在数据库中，所以我们需要以数据库的角度审视它们。
+
+##### 行锁
+
+行锁就是一锁锁一行或者多行记录，mysql的**行锁是基于索引加载的**，所以行锁是要加在索引响应的行上，即命中索引。行锁冲突概率低，并发性高，但是会有死锁的情况出现。
+
+##### 表锁
+
+表锁就是一锁锁一整张表，在表被锁定期间，其他事务不能对该表进行操作，必须等当前表的锁被释放后才能进行操作。**表锁响应的是非索引字段，即全表扫描**，全表扫描时锁定整张表。由于表锁每次都是锁一整张表，所以表锁的锁冲突几率特别高，表锁不会出现死锁的情况。
+
+#### 小结一下
+
+以前我们所用到的 synchronized 关键字以及 ReentrantLock 实现类均为悲观锁、独占锁。
+
+在数据库中的行锁、表锁的设计思想均为悲观锁思想。
+
+接下来要学习到的写锁是一种独占锁，但是读锁是一种共享锁。
+
+### 读写锁介绍
+
+现实中有这样一种场景：对共享资源有读和写的操作，且写操作没有读操作那么频繁。在没有写操作的时候，多个线程同时读一个资源没有任何问题，所以应该允许多个线程同时读取共享资源；但是如果一个线程想去写这些共享资源，就不应该允许其他线程对该资源进行读和写的操作了。针对这种场景，JAVA 的并发包提供了读写锁 ReentrantReadWriteLock。
+
+**读写锁的演进历史：**
+
+1. 无锁阶段：多线程竞争资源，非常容易出现错误的情况，进程调度和程序执行都显得非常凌乱。
+2. 添加锁阶段：使用 synchronized 关键字和 ReentrantLock 实现类加独占锁，同一时间只能存在只读或只写操作。
+3. 读写锁阶段：使用 ReentrantReadWriteLock 实现类加读写锁，读锁是共享锁，写锁是独占锁，实现可以存在同时读读以及同时读写两种情况，但是依旧不能同时写写。
+
+**线程进入读锁的前提条件：**
+
+- 没有其他线程的写锁。
+- 有写请求，但调用线程和持有锁的线程是同一个(可重入锁)，即读锁线程发起的写请求。
+
+**线程进入写锁的前提条件：**
+
+- 没有其他线程的读锁。
+- 没有其他线程的写锁。
+
+**根据上面的条件就可以判断无论是读锁还是写锁，都有可能发生死锁的情况：**
+
+- 读锁死锁举例：A、B 两线程同时读取一块内存数据，此时 A、B 线程都想要对这块内存数据发起写请求（获取写锁），那么 A 线程就要等待 B 线程释放读锁，B 线程就要等待 A 线程释放读锁，但是 A、B 两线程释放读锁的前提都是完成各自的写请求，死锁现象就此产生。
+- 写锁死锁举例：A 线程写 a 内存的数据，B 线程写 b 内存的数据，此时 A、B 线程在都没写完的情况下向对方正在写的内存发起操作请求，两线程都在等待对方释放写锁，但是双方释放写锁的前提是完成向对方正在写的内存的操作请求，死锁现象就此产生。
+
+**ReentrantReadWriteLock有以下三个重要的特性：**
+
+- 公平选择性：支持非公平（默认）和公平的锁获取方式，吞吐量还是非公平优于公平。
+- 可重入：读锁和写锁都支持线程可重入。
+- 锁降级：遵循获取写锁、获取读锁、释放写锁、最后释放读锁的次序，写锁能够降级成为读锁，但是读锁不能升级为写锁。
+
+### 演示示例
+
+**ReentrantReadWriteLock演示示例：**
+
+场景：使用 ReentrantReadWriteLock 对一个 HashMap 进行读和写操作，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo08/Demo08_1.java)如下：
+
+```java
+import java.util.HashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+/**
+ * 读写锁示例代码
+ * 使用 ReentrantReadWriteLock 对一个 HashMap 进行读和写操作
+ *
+ * @author AntonyCheng
+ */
+public class Demo08_1 {
+
+    public static void main(String[] args) {
+        Demo08_1ReadWriteLock demo081ReadWriteLock = new Demo08_1ReadWriteLock();
+        // 多线程写
+        for (int i = 0; i < 5; i++) {
+            final String num = String.valueOf(i);
+            new Thread(() -> {
+                demo081ReadWriteLock.put(num, "value " + num);
+            }, "Write" + (i + 1)).start();
+        }
+        // 多线程读
+        for (int i = 0; i < 5; i++) {
+            final String num = String.valueOf(i);
+            new Thread(() -> {
+                demo081ReadWriteLock.get(num);
+            }, "Read" + (i + 1)).start();
+        }
+    }
+
+}
+
+/**
+ * 定义读写锁资源类
+ */
+class Demo08_1ReadWriteLock {
+    /**
+     * 定义 HashMap
+     */
+    private volatile HashMap<String, String> hashMap = new HashMap<>();
+
+    /**
+     * 定义读写锁
+     */
+    private final ReentrantReadWriteLock READ_WRITE_LOCK = new ReentrantReadWriteLock();
+
+    private final ReentrantReadWriteLock.ReadLock READ_LOCK = READ_WRITE_LOCK.readLock();
+    private final ReentrantReadWriteLock.WriteLock WRITE_LOCK = READ_WRITE_LOCK.writeLock();
+
+    /**
+     * 定义写操作
+     */
+    public void put(String key, String value) {
+        // 获取写锁
+        WRITE_LOCK.lock();
+        System.out.println(Thread.currentThread().getName() + "：已经获取写锁，开始写操作...");
+        // 模拟读操作需要1s
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println(Thread.currentThread().getName() + "：写操作完毕！");
+        // 释放写锁
+        WRITE_LOCK.unlock();
+    }
+
+    /**
+     * 定义读操作
+     */
+    public void get(String key) {
+        // 获取读锁
+        READ_LOCK.lock();
+        System.out.println(Thread.currentThread().getName() + "：已经获取读锁，开始读操作...");
+        // 模拟读操作需要0.5s
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println(Thread.currentThread().getName() + "：读操作完毕！");
+        // 释放读锁
+        READ_LOCK.unlock();
+    }
+}
+```
+
+运行结果如下：
+
+![image-20240227151743351](./assets/image-20240227151743351.png)
+
+**锁降级演示示例：**
+
+上面提到过锁降级，并且将过程叙述了一遍：遵循获取写锁、获取读锁、释放写锁、最后释放读锁的次序，写锁能够降级成为读锁，但是读锁不能升级为写锁。
+
+大白话的意思就是**修改权限的等级天生就比读取权限的等级要高**，获取写锁之后可以在不释放写锁的情况下获取得到读锁进行读操作，如果整个过程不做任何写操作就将写锁释放，那么一个写锁就降级成为了读锁，直到读锁被释放，最终脱离锁状态。
+
+锁降级[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo08/Demo08_2.java)如下：
+
+```java
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+/**
+ * 锁降级示例代码
+ *
+ * @author AntonyCheng
+ */
+public class Demo08_2 {
+
+    public static void main(String[] args) {
+        // 定义读写锁
+        ReentrantReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+        ReentrantReadWriteLock.ReadLock readLock = readWriteLock.readLock();
+        ReentrantReadWriteLock.WriteLock writeLock = readWriteLock.writeLock();
+        // 获取写锁
+        writeLock.lock();
+        System.out.println("已经获取到写锁，整个锁状态变为写锁状态，接下来获取读锁...");
+        // 获取读锁
+        readLock.lock();
+        System.out.println("已经获取到读锁，接下来释放写锁，使整个锁状态只存在读锁...");
+        // 释放写锁
+        writeLock.unlock();
+        System.out.println("已经释放写锁，整个锁状态变为读锁状态，最后释放读锁...");
+        // 释放读锁
+        readLock.unlock();
+        System.out.println("成功从写锁->读锁->无锁，完成锁降级！接下来试试锁升级，即读锁->写锁->无锁...");
+        // 如果上述代码均能执行那就说明能够从写锁降级为读锁
+
+        // 获取读锁
+        readLock.lock();
+        System.out.println("已经获取到读锁，整个锁状态变为读锁状态，接下来获取写锁...");
+        // 获取写锁
+        writeLock.lock();
+        System.out.println("下面就不用再做说明了，因为根本就无法获取到写锁，这个打印操作也就不会执行...");
+        // 释放读锁
+        readLock.unlock();
+        // 释放写锁
+        writeLock.unlock();
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240227153405403](./assets/image-20240227153405403.png)
+
+## 阻塞队列
+
+### BlockingQueue简介
+
+JUC 包中，BlockingQueue 很好的解决了多线程中，如何高效安全“传输”数据的问题。通过这些高效并且线程安全的队列类，为我们快速搭建高质量的多线程程序带来极大的便利。接下来会详细介绍 BlockingQueue 家庭中的所有成员，包括它们各自的功能以及常见使用场景。
+
+阻塞队列，顾名思义，首先它是一个队列, 通过一个共享的队列，可以使得数据由队列的一端输入，从另外一端输出；
+
+![image-20240227153702006](./assets/image-20240227153702006.png)
+
+**阻塞队列的特点：**
+
+- 当队列是空的，从队列中获取元素的操作将会被阻塞。
+- 当队列是满的，从队列中添加元素的操作将会被阻塞。
+- 试图从空的队列中获取元素的线程将会被阻塞，直到其他线程往空的队列插入新的元素。
+- 试图向已满的队列中添加新元素的线程将会被阻塞，直到其他线程从队列中移除一个或多个元素或者完全清空，使队列变得空闲起来并后续新增。
+
+在多线程领域：所谓阻塞，在某些情况下会挂起线程（即阻塞），一旦条件满足，被挂起的线程又会自动被唤起。
+
+**为什么需要BlockingQueue？**
+
+好处是我们不需要关心什么时候需要阻塞线程，什么时候需要唤醒线程，因为这一切 BlockingQueue 都给你一手包办了。在 JUC 包发布以前，在多线程环境下，我们都必须去自己控制这些细节，尤其还要兼顾效率和线程安全，而这会给我们的程序带来不小的复杂度。
+
+多线程环境中，通过队列可以很容易实现数据共享，比如经典的“生产者”和“消费者”模型中，通过队列可以很便利地实现两者之间的数据共享。假设我们有若干生产者线程，另外又有若干个消费者线程。如果生产者线程需要把准备好的数据共享给消费者线程，利用队列的方式来传递数据，就可以很方便地解决他们之间的数据共享问题。但如果生产者和消费者在某个时间段内，万一发生数据处理速度不匹配的情况呢？理想情况下，如果生产者产出数据的速度大于消费者消费的速度，并且当生产出来的数据累积到一定程度的时候，那么生产者必须暂停等待一下（阻塞生产者线程），以便等待消费者线程把累积的数据处理完毕，反之亦然。以”生产者“和”消费者“模型为例，它的队列阻塞情况如下：
+
+- 当队列中没有数据的情况下，消费者端的所有线程都会被自动阻塞（挂起），直到有数据放入队列。
+- 当队列中填满数据的情况下，生产者端的所有线程都会被自动阻塞（挂起），直到队列中有空的位置，线程被自动唤醒。
+
+### BlockingQueue核心方法
+
+| 方法类型 | 抛出异常  | 特殊值   | 阻塞   | 超时               |
+| -------- | --------- | -------- | ------ | ------------------ |
+| 插入     | add(e)    | offer(e) | put(e) | offer(e,time,unit) |
+| 移除     | remove()  | poll()   | take() | poll(time,unit)    |
+| 检查     | element() | peek()   | 不可用 | 不可用             |
+
+对于上述的解释表格如下：
+
+| 名称     | 解释                                                         |
+| -------- | ------------------------------------------------------------ |
+| 抛出异常 | 当阻塞队列满时，再往队列里add插入元素会抛出IllegalStateException；<br />当阻塞队列空时，再往队列里remove移除元素会抛出NoSuchElmentException。 |
+| 特殊值   | offer插入成功则返回true，失败则返回false；<br />poll移除成功则返回出队元素，队列中没有元素则返回null。 |
+| 一直阻塞 | 当阻塞队列满时，生产者线程会继续往队列中put元素，队列会一直阻塞生产者线程，直到put数据或者响应中断退出；<br />当阻塞队列空时，消费者线程尝试从队列中take元素，队列会一直阻塞消费者线程，直到队列可用。 |
+| 超时退出 | 当阻塞队列满时，队列会阻塞生产者线程一定时间，超过限时后生产者线程会退出；<br />当阻塞队列空时，队列会阻塞消费者线程一定时间，超过限时后消费者线程会退出。 |
+
