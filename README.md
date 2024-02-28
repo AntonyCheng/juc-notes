@@ -2883,3 +2883,29 @@ JUC 包中，BlockingQueue 很好的解决了多线程中，如何高效安全�
 | 一直阻塞 | 当阻塞队列满时，生产者线程会继续往队列中put元素，队列会一直阻塞生产者线程，直到put数据或者响应中断退出；<br />当阻塞队列空时，消费者线程尝试从队列中take元素，队列会一直阻塞消费者线程，直到队列可用。 |
 | 超时退出 | 当阻塞队列满时，队列会阻塞生产者线程一定时间，超过限时后生产者线程会退出；<br />当阻塞队列空时，队列会阻塞消费者线程一定时间，超过限时后消费者线程会退出。 |
 
+#### 插入数据方法
+
+**`offer(anObject)`**：表示如果可能的话，将 anObject 加到 BlockingQueue 里，即如果 BlockingQueue 可以容纳，则返回 true，否则返回 false（本方法不阻塞当前执行方法的线程）。
+
+**`offer(E o, long timeout, TimeUnit unit)`**：可以设定等待的时间，如果在指定的时间内，还不能往队列中加入 BlockingQueue，则返回失败。
+
+**`put(anObject)`**：把 anObject 加到 BlockingQueue 里，如果 BlockQueue 没有空间，则调用此方法的线程被阻断直到 BlockingQueue 里面有空间再继续。
+
+#### 移除数据方法
+
+**`poll(time)`**：取走 BlockingQueue 里排在首位的对象，若不能立即取出，则可以等 time 参数规定的时间，取不到时返回 null。
+
+**`poll(long timeout, TimeUnit unit)`**：从 BlockingQueue 取出一个队首的对象，如果在指定时间内，队列一旦有数据可取，则立即返回队列中的数据。否则知道时间超时还没有数据可取，返回失败。
+
+**`take()`**：取走 BlockingQueue 里排在首位的对象，若 BlockingQueue 为空，阻断进入等待状态直到 BlockingQueue 有新的数据被加入。
+
+**`drainTo()`**：一次性从 BlockingQueue 获取所有可用的数据对象（还可以指定获取数据的个数），通过该方法，可以提升获取数据效率；不需要多次分批加锁或释放锁。
+
+#### 方法使用示例
+
+阻塞队列[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo09/Demo09_1.java)如下：
+
+```java
+
+```
+
