@@ -2906,6 +2906,576 @@ JUC 包中，BlockingQueue 很好的解决了多线程中，如何高效安全�
 阻塞队列[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo09/Demo09_1.java)如下：
 
 ```java
+import java.util.NoSuchElementException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
+/**
+ * 阻塞队列示例代码
+ *
+ * @author AntonyCheng
+ */
+public class Demo09_1 {
+
+    public static void main(String[] args) {
+        Demo09_1BlockingQueue blockingQueue = new Demo09_1BlockingQueue();
+        System.out.println("===============第一组方法：add(obj)、remove()以及element()");
+        blockingQueue.inAndOut1();
+        System.out.println("\n===============第二组方法：offer(obj)、poll()以及peek()");
+        blockingQueue.inAndOut2();
+        System.out.println("\n===============第三组方法：put(obj)、take()");
+        blockingQueue.inAndOut3();
+        System.out.println("\n===============第四组方法：offer(e,time,unit)、poll(time,unit)");
+        blockingQueue.inAndOut4();
+    }
+
+}
+
+/**
+ * 阻塞队列类
+ */
+class Demo09_1BlockingQueue {
+
+    /**
+     * 创建一个容量为3的阻塞队列
+     */
+    private final ArrayBlockingQueue<String> blockingQueue = new ArrayBlockingQueue<>(3);
+
+    /**
+     * 第一组方法：add(obj)、remove()以及element()
+     */
+    public void inAndOut1() {
+        // 向阻塞队列中使用尾插法插入三个元素
+        System.out.println("插入a" + (blockingQueue.add("a") ? "成功" : "失败"));
+        System.out.println("插入b" + (blockingQueue.add("b") ? "成功" : "失败"));
+        System.out.println("插入c" + (blockingQueue.add("c") ? "成功" : "失败"));
+        // 查看队首元素
+        System.out.println("此时队首元素为" + blockingQueue.element());
+        // 如果再向队列中插入数据，由于满队，add()方法会抛出异常
+        try {
+            blockingQueue.add("d");
+        } catch (IllegalStateException e) {
+            System.out.println("抓住异常：" + e.getClass().getName() + "，插入元素失败");
+        }
+        // 开始移除队列中的元素
+        System.out.println("接下来移除队列中的元素");
+        System.out.println("成功移除" + blockingQueue.remove());
+        System.out.println("成功移除" + blockingQueue.remove());
+        System.out.println("成功移除" + blockingQueue.remove());
+        // 查看队首元素，但由于空队，element()方法会抛出异常
+        try {
+            System.out.println("此时队首元素为" + blockingQueue.element());
+        } catch (NoSuchElementException e) {
+            System.out.println("抓住异常：" + e.getClass().getName() + ",查看队首元素失败");
+        }
+        // 如果再让队列移除数据，由于空队，remove()方法会抛出异常
+        try {
+            blockingQueue.remove();
+        } catch (NoSuchElementException e) {
+            System.out.println("抓住异常：" + e.getClass().getName() + ",移除元素失败");
+        }
+    }
+
+    /**
+     * 第二组方法：offer(obj)、poll()以及peek()
+     */
+    public void inAndOut2() {
+        // 向阻塞队列中使用尾插法插入三个元素
+        System.out.println("插入a" + (blockingQueue.offer("a") ? "成功" : "失败"));
+        System.out.println("插入b" + (blockingQueue.offer("b") ? "成功" : "失败"));
+        System.out.println("插入c" + (blockingQueue.offer("c") ? "成功" : "失败"));
+        // 查看队首元素
+        System.out.println("此时队首元素为" + blockingQueue.peek());
+        // 如果再向队列中插入数据，由于满队，offer()方法会返回false
+        System.out.println("插入d" + (blockingQueue.offer("d") ? "成功" : "失败"));
+        // 开始移除队列中的元素
+        System.out.println("接下来移除队列中的元素");
+        System.out.println("成功移除" + blockingQueue.poll());
+        System.out.println("成功移除" + blockingQueue.poll());
+        System.out.println("成功移除" + blockingQueue.poll());
+        // 查看队首元素，但由于空队，peek()方法会返回null
+        System.out.println("此时队首元素为" + blockingQueue.peek());
+        // 如果再让队列移除数据，由于空队，poll()方法会返回null
+        System.out.println("移除的元素为" + blockingQueue.poll());
+    }
+
+    /**
+     * 第三组方法：put(obj)、take()
+     */
+    public void inAndOut3() {
+        try {
+            // 向阻塞队列中使用尾插法插入三个元素
+            blockingQueue.put("a");
+            System.out.println("插入a成功");
+            blockingQueue.put("b");
+            System.out.println("插入b成功");
+            blockingQueue.put("c");
+            System.out.println("插入c成功");
+            // 查看队首元素
+            System.out.println("此时队首元素为" + blockingQueue.peek());
+            // 此时阻塞队列已经满队，如果再向队列中插入元素，就会造成阻塞，所以在插入之前用另外一条线程对其模拟移除元素的操作
+            new Thread(() -> {
+                try {
+                    // 先让线程睡1s，模拟正在处理其他请求
+                    Thread.sleep(1000);
+                    // 然后从队列中移除元素，用任何移除方法均可
+                    System.out.println("子线程移除了队首元素：" + blockingQueue.remove());
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }).start();
+            System.out.println("插入d时发生了阻塞，等待中...");
+            blockingQueue.put("d");
+            // 为了更好的演示和避免因println方法耗时过长打印顺序混乱的问题，线程小睡0.1s
+            Thread.sleep(100);
+            System.out.println("插入d成功");
+            // 开始移除队列中的元素
+            System.out.println("接下来移除队列中的元素");
+            System.out.println("成功移除" + blockingQueue.take());
+            System.out.println("成功移除" + blockingQueue.take());
+            System.out.println("成功移除" + blockingQueue.take());
+            // 此时阻塞队列已经空队，如果再从队列中移除元素，就会造成阻塞，所以在移除之前用另外一条线程对其模拟插入元素的操作
+            new Thread(() -> {
+                try {
+                    // 先让线程睡1s，模拟正在处理其他请求
+                    Thread.sleep(1000);
+                    // 然后向队列中插入元素，用任何插入方法均可
+                    blockingQueue.offer("e");
+                    System.out.println("子线程尾插入元素：e");
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }).start();
+            System.out.println("移除时发生了阻塞，等待中...");
+            String take = blockingQueue.take();
+            // 为了更好的演示和避免因println方法耗时过长打印顺序混乱的问题，线程小睡0.1s
+            Thread.sleep(100);
+            System.out.println("移除" + take + "成功");
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 第四组方法：offer(e,time,unit)、poll(time,unit)
+     */
+    public void inAndOut4() {
+        try {
+            // 向阻塞队列中使用尾插法插入三个元素
+            System.out.println("插入a" + (blockingQueue.offer("a") ? "成功" : "失败"));
+            System.out.println("插入b" + (blockingQueue.offer("b") ? "成功" : "失败"));
+            System.out.println("插入c" + (blockingQueue.offer("c") ? "成功" : "失败"));
+            // 查看队首元素
+            System.out.println("此时队首元素为" + blockingQueue.peek());
+            // 再定时插入一个
+            System.out.println("长时间满队，插入d" + (blockingQueue.offer("d", 1, TimeUnit.SECONDS) ? "成功" : "失败"));
+            // 开始移除队列中的元素
+            System.out.println("接下来移除队列中的元素");
+            System.out.println("成功移除" + blockingQueue.poll());
+            System.out.println("成功移除" + blockingQueue.poll());
+            System.out.println("成功移除" + blockingQueue.poll());
+            // 再定时移除一个
+            System.out.println("长时间空队，移除"+blockingQueue.poll(1,TimeUnit.SECONDS));
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
 ```
 
+运行结果如下：
+
+![image-20240228220832600](./assets/image-20240228220832600.png)
+
+![image-20240228220848515](./assets/image-20240228220848515.png)
+
+### 常见的BlockingQueue
+
+#### ArrayBlockingQueue(常用)
+
+基于数组的阻塞队列实现，在 ArrayBlockingQueue 内部，维护了一个定长数组，以便缓存队列中的数据对象，这是一个常用的阻塞队列，除了一个定长数组外，ArrayBlockingQueue 内部还保存着两个整形变量，分别标识着队列的头部和尾部在数组中的位置。
+
+ArrayBlockingQueue 在生产者放入数据和消费者获取数据，都是共用同一个锁对象，由此也意味着两者无法真正并行运行，这点尤其不同于 LinkedBlockingQueue；按照实现原理来分析，ArrayBlockingQueue 完全可以采用分离锁，从而实现生产者和消费者操作的完全并行运行。Doug Lea 之所以没这样去做，也许是因为 ArrayBlockingQueue 的数据写入和获取操作已经足够轻巧，以至于引入独立的锁机制，除了给代码带来额外的复杂性外，其在性能上完全占不到任何便宜。ArrayBlockingQueue 和 LinkedBlockingQueue 间还有一个明显的不同之处在于，前者在插入或删除元素时不会产生或销毁任何额外的对象实例，而后者则会生成一个额外的 Node 对象。这在长时间内需要高效并发地处理大批量数据的系统中，其对于GC的影响还是存在一定的区别。而在创建 ArrayBlockingQueue 时，我们还可以控制对象的内部锁是否采用公平锁，默认采用非公平锁。
+
+==**一句话总结：由数组结构组成的有界阻塞队列。**==
+
+#### LinkedBlockingQueue(常用)
+
+基于链表的阻塞队列，同 ArrayListBlockingQueue 类似，其内部也维持着一个数据缓冲队列（该队列由一个链表构成），当生产者往队列中放入一个数据时，队列会从生产者手中获取数据，并缓存在队列内部，而生产者立即返回；只有当队列缓冲区达到最大值缓存容量时（ LinkedBlockingQueue 可以通过构造函数指定该值），才会阻塞生产者队列，直到消费者从队列中消费掉一份数据，生产者线程会被唤醒，反之对于消费者这端的处理也基于同样的原理。而 LinkedBlockingQueue 之所以能够高效的处理并发数据，还因为其对于生产者端和消费者端分别采用了独立的锁来控制数据同步，这也意味着在高并发的情况下生产者和消费者可以并行地操作队列中的数据，以此来提高整个队列的并发性能。
+
+ArrayBlockingQueue和LinkedBlockingQueue是两个最普通也是最常用的阻塞队列，一般情况下，在处理多线程间的生产者消费者问题，使用这两个类足以。
+
+==**一句话总结：由链表结构组成的有界（但大小默认值为 Integer.MAX_VALUE ）阻塞队列。**==
+
+#### DelayQueue
+
+DelayQueue 中的元素只有当其指定的延迟时间到了，才能够从队列中获取到该元素。DelayQueue 是一个没有大小限制的队列，因此往队列中插入数据的操作（生产者）永远不会被阻塞，而只有获取数据的操作（消费者）才会被阻塞。
+
+==**一句话总结：使用优先级队列实现的延迟无界阻塞队列。**==
+
+#### PriorityBlockingQueue
+
+基于优先级的阻塞队列（优先级的判断通过构造函数传入的 Compator 对象来决定），但需要注意的是 PriorityBlockingQueue 并不会阻塞数据生产者，而只会在没有可消费的数据时，阻塞数据的消费者。
+
+因此使用的时候要特别注意，生产者生产数据的速度绝对不能快于消费者消费数据的速度，否则时间一长，会最终耗尽所有的可用堆内存空间。
+
+在实现 PriorityBlockingQueue 时，内部控制线程同步的锁采用的是公平锁。
+
+==**一句话总结：支持优先级排序的无界阻塞队列。**==
+
+#### SynchronousQueue
+
+一种无缓冲的等待队列，类似于无中介的直接交易，有点像原始社会中的生产者和消费者，生产者拿着产品去集市销售给产品的最终消费者，而消费者必须亲自去集市找到所要商品的直接生产者，如果一方没有找到合适的目标，那么对不起，大家都在集市等待。相对于有缓冲的 BlockingQueue 来说，少了一个中间经销商的环节（缓冲区），如果有经销商，生产者直接把产品批发给经销商，而无需在意经销商最终会将这些产品卖给那些消费者，由于经销商可以库存一部分商品，因此相对于直接交易模式，总体来说采用中间经销商的模式会吞吐量高一些（可以批量买卖）；但另一方面，又因为经销商的引入，使得产品从生产者到消费者中间增加了额外的交易环节，单个产品的及时响应性能可能会降低。
+
+声明一个 SynchronousQueue 有两种不同的方式，它们之间有着不太一样的行为。
+
+公平模式和非公平模式的区别：
+
+- 公平模式：SynchronousQueue 会采用公平锁，并配合一个 FIFO 队列来阻塞多余的生产者和消费者，从而体系整体的公平策略。
+- 非公平模式（ SynchronousQueue 默认）：SynchronousQueue 采用非公平锁，同时配合一个 LIFO 队列来管理多余的生产者和消费者，而后一种模式，如果生产者和消费者的处理速度有差距，则很容易出现饥渴的情况，即可能有某些生产者或者是消费者的数据永远都得不到处理。
+
+==**一句话总结：不存储元素的阻塞队列，也即单个元素的队列。**==
+
+#### LinkedTransferQueue
+
+LinkedTransferQueue 是一个由链表结构组成的无界阻塞 TransferQueue 队列。相对于其他阻塞队列，LinkedTransferQueue 多了 `tryTransfer()` 和 `transfer()` 方法。
+
+LinkedTransferQueue 采用一种预占模式。意思就是消费者线程取元素时，如果队列不为空，则直接取走数据，若队列为空，那就生成一个节点（节点元素为 null ）入队，然后消费者线程被等待在这个节点上，后面生产者线程入队时发现有一个元素为 null 的节点，生产者线程就不入队了，直接就将元素填充到该节点，并唤醒该节点等待的线程，被唤醒的消费者线程取走元素，从调用的方法返回。
+
+==**一句话总结：由链表组成的无界阻塞队列。**==
+
+#### LinkedBlockingDeque
+
+LinkedBlockingDeque 是一个由链表结构组成的双向阻塞队列，即可以从队列的两端插入和移除元素。
+
+对于一些指定的操作，在插入或者获取队列元素时如果队列状态不允许该操作可能会阻塞住该线程直到队列状态变更为允许操作，这里的阻塞一般有两种情况：
+
+- 插入元素时：如果当前队列已满将会进入阻塞状态，一直等到队列有空的位置时再讲该元素插入，该操作可以通过设置超时参数，超时后返回 false 表示操作失败，也可以不设置超时参数一直阻塞，中断后抛出 InterruptedException 异常。
+- 读取元素时：如果当前队列为空会阻塞住直到队列不为空然后返回元素，同样可以通过设置超时参数。
+
+==**一句话总结：由链表组成的双向阻塞队列。**==
+
+### 小节
+
+1. 在多线程领域：所谓阻塞，在某些情况下会挂起线程（即阻塞），一旦条件满足，被挂起的线程又会自动被唤起。
+2. 为什么需要 BlockingQueue ？在 concurrent 包发布以前，在多线程环境下，我们每个程序员都必须去自己控制这些细节，尤其还要兼顾效率和线程安全，而这会给我们的程序带来不小的复杂度。使用后我们不需要关心什么时候需要阻塞线程，什么时候需要唤醒线程，因为这一切 BlockingQueue 都给你一手包办了。
+
+## ThreadPool线程池
+
+### 线程池简介
+
+线程池（英语：Thread Pool）：一种线程使用模式。线程过多会带来调度开销，进而影响缓存局部性和整体性能。而线程池维护着多个线程，等待着监督管理者分配可并发执行的任务。这避免了在处理短时间任务时创建与销毁线程的代价。线程池不仅能够保证内核的充分利用，还能防止过分调度。
+
+例子： 10 年前单核 CPU 电脑，假的多线程，像马戏团小丑玩多个球，CPU 需要来回切换。 现在是多核电脑，多个线程各自跑在独立的CPU上，不用切换效率高。
+
+线程池的优势：线程池做的工作只要是控制运行的线程数量，处理过程中将任务放入队列，然后在线程创建后启动这些任务，如果线程数量超过了最大数量，超出数量的线程排队等候，等其他线程执行完毕，再从队列中取出任务来执行。
+
+**主要特点如下：**
+
+- 降低资源消耗：通过重复利用已创建的线程降低线程创建和销毁造成的销耗。
+
+- 提高响应速度：当任务到达时，任务可以不需要等待线程创建就能立即执行。
+
+- 提高线程的可管理性：线程是稀缺资源，如果无限制的创建，不仅会销耗系统资源，还会降低系统的稳定性，使用线程池可以进行统一的分配，调优和监控。
+
+- Java 中的线程池是通过 Executor 框架实现的，该框架中用到了 Executor ，Executors ，ExecutorService ，ThreadPoolExecutor 这几个类，关系图如下：
+
+  ![image-20240228215841214](./assets/image-20240228215841214.png)
+
+### 线程池参数说明
+
+#### 常用参数
+
+corePoolSize：线程池的核心线程数。
+
+maximumPoolSize：能容纳的最大线程数。
+
+keepAliveTime：空闲线程存活时间。
+
+unit：存活的时间单位。
+
+workQueue：存放提交但未执行任务的队列。
+
+threadFactory：创建线程的工厂类。
+
+handler：等待队列满后的拒绝策略。
+
+线程池中，有三个重要的参数，决定影响了拒绝策略：
+
+1. corePoolSize - 核心线程数，也即最小的线程数。
+2. workQueue - 阻塞队列。 
+3. maximumPoolSize - 最大线程数。
+
+当提交任务数大于 corePoolSize 的时候，会优先将任务放到 workQueue 阻塞队列中。当阻塞队列饱和后，会扩充线程池中线程数，直到达到 maximumPoolSize 最大线程数配置。此时，再多余的任务，则会触发线程池的拒绝策略了。
+
+总结起来，也就是一句话，**当提交的任务数大于 `(workQueue.size() + maximumPoolSize)` ，就会触发线程池的拒绝策略**。
+
+#### 拒绝策略(重点)
+
+**CallerRunsPolicy**：当触发拒绝策略，只要线程池没有关闭的话，则使用调用线程直接运行任务。一般并发比较小，性能要求不高，不允许失败。但是，由于调用者自己运行任务，如果任务提交速度过快，可能导致程序阻塞，性能效率上必然的损失较大。
+
+**AbortPolicy**：丢弃任务，并抛出拒绝执行 RejectedExecutionException 异常信息。线程池默认的拒绝策略。必须处理好抛出的异常，否则会打断当前的执行流程，影响后续的任务执行。
+
+**DiscardPolicy**：直接丢弃，其他啥都没有。
+
+**DiscardOldestPolicy**：当触发拒绝策略，只要线程池没有关闭的话，丢弃阻塞队列 workQueue 中最老的一个任务，并将新任务加入。
+
+### 线程池种类与创建
+
+#### newCachedThreadPool(常用)
+
+**作用**：创建一个可缓存线程池，如果线程池长度超过处理需要，可灵活回收空闲线程，若无可回收，则新建线程。
+
+**特点**：
+
+- 线程池中数量没有固定，可达到最大值（Interger. MAX_VALUE）。
+- 线程池中的线程可进行缓存重复利用和回收（回收默认时间为1分钟）。
+- 当线程池中，没有可用线程，会重新创建一个线程。
+
+**[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo10/Demo10_1.java)如下**：
+
+```java
+import java.util.concurrent.*;
+
+/**
+ * Executors.newCachedThreadPool创建可缓存线程池
+ *
+ * @author AntonyCheng
+ */
+public class Demo10_1 {
+
+    public static void main(String[] args) {
+        // 创建可缓存线程池
+        ExecutorService cachedThreadPool = Executors.newCachedThreadPool();
+        try {
+            // 使用线程池执行任务
+            for (int i = 0; i < 10; i++) {
+                cachedThreadPool.submit(() -> {
+                    System.out.println(Thread.currentThread().getName() + "线程正在运行...");
+                });
+            }
+        } finally {
+            // 关闭可缓存线程池
+            cachedThreadPool.shutdown();
+        }
+    }
+
+}
+```
+
+运行效果如下：
+
+![image-20240228231634025](./assets/image-20240228231634025.png)
+
+底层源码如下，源码直接使用 IDEA 查看即可，之后就不再展示：
+
+```java
+public static ExecutorService newCachedThreadPool() {
+    return new ThreadPoolExecutor(
+            // corePoolSize 线程池的核心线程数
+            0,
+            // maximumPoolSize 能容纳的最大线程数
+            Integer.MAX_VALUE,
+            // keepAliveTime 空闲线程存活时间
+            60L,
+            // unit 存活的时间单位
+            TimeUnit.SECONDS,
+            // workQueue 存放提交但未执行任务的队列
+            new SynchronousQueue<>(),
+            // threadFactory 创建线程的工厂类:可以省略
+            Executors.defaultThreadFactory(),
+            // handler 等待队列满后的拒绝策略:可以省略
+            new ThreadPoolExecutor.AbortPolicy());
+}
+```
+
+**场景**：适用于创建一个可无限扩大的线程池，服务器负载压力较轻，执行时间较短，任务多的场景。
+
+#### newFixedThreadPool(常用)
+
+**作用**：创建一个可重用固定线程数的线程池，以共享的无界队列方式来运行这些线程。在任意点，在大多数线程会处于处理任务的活动状态。如果在所有线程处于活动状态时提交附加任务，则在有可用线程之前，附加任务将在队列中等待。如果在关闭前的执行期间由于失败而导致任何线程终止，那么一个新线程将代替它执行后续的任务（如果需要）。在某个线程被显式地关闭之前，池中的线程将一直存在。
+
+**特点**：
+
+- 线程池中的线程处于一定的量，可以很好的控制线程的并发量。
+- 线程可以重复被使用，在显示关闭之前，都将一直存在。
+- 超出一定量的线程被提交时候需在队列中等待。
+
+**[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo10/Demo10_2.java)如下**：
+
+```java
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Executors.newFixedThreadPool创建固定数量线程池
+ *
+ * @author AntonyCheng
+ */
+public class Demo10_2 {
+
+    public static void main(String[] args) {
+        // 创建固定数量线程池
+        ExecutorService fixedThreadPool = Executors.newFixedThreadPool(5);
+        try {
+            // 使用线程池执行任务
+            for (int i = 0; i < 10; i++) {
+                fixedThreadPool.submit(() -> {
+                    System.out.println(Thread.currentThread().getName() + "线程正在运行...");
+                });
+            }
+        } finally {
+            // 关闭固定数量线程池
+            fixedThreadPool.shutdown();
+        }
+    }
+
+}
+```
+
+运行效果如下：
+
+![image-20240228231941632](./assets/image-20240228231941632.png)
+
+#### newSingleThreadExecutor(常用)
+
+**作用**：创建一个使用单个 worker 线程的 Executor，以无界队列方式来运行该线程。（注意，如果因为在关闭前的执行期间出现失败而终止了此单个线程，那么如果需要，一个新线程将代替它执行后续的任务）。可保证顺序地执行各个任务，并且在任意给定的时间不会有多个线程是活动的。与其他等效的 newFixedThreadPool 不同，可保证无需重新配置此方法所返回的执行程序即可使用其他的线程。
+
+**特点**：线程池中最多执行1个线程，之后提交的线程活动将会排在队列中以此执行。
+
+**[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo10/Demo10_3.java)如下**：
+
+```java
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Executors.newSingleThreadExecutor创建单线程池处理器
+ *
+ * @author AntonyCheng
+ */
+public class Demo10_3 {
+
+    public static void main(String[] args) {
+        // 创建单线程池处理器
+        ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor();
+        try {
+            // 使用线程池执行任务
+            for (int i = 0; i < 10; i++) {
+                singleThreadExecutor.submit(() -> {
+                    System.out.println(Thread.currentThread().getName() + "线程正在运行...");
+                });
+            }
+        } finally {
+            // 关闭单线程池处理器
+            singleThreadExecutor.shutdown();
+        }
+    }
+
+}
+```
+
+运行效果如下：
+
+![image-20240228232717445](./assets/image-20240228232717445.png)
+
+**场景**：适用于需要保证顺序执行各个任务，并且在任意时间点，不会同时有多个线程的场景
+
+#### newScheduleThreadPool(了解)
+
+**作用**：线程池支持定时以及周期性执行任务，创建一个corePoolSize为传入参数，最大线程数为整型的最大值的线程池。
+
+**特点**：
+
+- 线程池中具有指定数量的线程，即便是空线程也将保留。
+- 可定时或者延迟执行线程活动。
+
+**[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo10/Demo10_4.java)如下**：
+
+```java
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Executors.newScheduledThreadPool创建支持可定时任务线程池
+ *
+ * @author AntonyCheng
+ */
+public class Demo10_4 {
+
+    public static void main(String[] args) {
+        // 创建支持可定时任务线程池
+        ExecutorService scheduledThreadPool = Executors.newScheduledThreadPool(5);
+        try {
+            // 使用线程池执行任务
+            for (int i = 0; i < 10; i++) {
+                scheduledThreadPool.submit(() -> {
+                    System.out.println(Thread.currentThread().getName() + "线程正在运行...");
+                });
+            }
+        } finally {
+            // 关闭支持可定时任务线程池
+            scheduledThreadPool.shutdown();
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240228233143788](./assets/image-20240228233143788.png)
+
+**场景**：适用于需要多个后台线程执行周期任务的场景。
+
+#### newWorkStealingPool(了解)
+
+**作用和特点**：JDK1.8 提供的线程池，底层使用的是 ForkJoinPool 实现，创建一个拥有多个任务队列的线程池，可以减少连接数，创建当前可用 CPU 核数的线程来并行执行任务，**用该线程池创建的线程均为守护进程**。
+
+**[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo10/Demo10_5.java)如下**：
+
+```java
+package top.sharehome.demo10;
+
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Executors.newWorkStealingPool创建基于ForkJoinPool实现的线程池（方法名就是ForkJoin底层算法名，即“工作窃取”算法）
+ *
+ * @author AntonyCheng
+ */
+public class Demo10_5 {
+
+    public static void main(String[] args) {
+        // 创建基于ForkJoinPool实现的线程池
+        ExecutorService workStealingPool = Executors.newWorkStealingPool(5);
+        try {
+            // 使用线程池执行任务
+            for (int i = 0; i < 10; i++) {
+                workStealingPool.submit(() -> {
+                    System.out.println(Thread.currentThread().getName() + "线程正在运行...");
+                });
+            }
+            // 因为新开线程都是守护线程，所以让主线程睡3s看看效果
+            System.out.println(Thread.currentThread().getName() + "等一下...");
+            Thread.sleep(3000);
+            System.out.println(Thread.currentThread().getName() + "不等了!");
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 关闭基于ForkJoinPool实现的线程池
+            workStealingPool.shutdownNow();
+        }
+    }
+
+}
+```
+
+运行效果如下：
+
+![image-20240228234607730](./assets/image-20240228234607730.png)
+
+**场景**：适用于大耗时，可并行执行的场景。

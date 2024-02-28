@@ -2,6 +2,7 @@ package top.sharehome.demo09;
 
 import java.util.NoSuchElementException;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 阻塞队列示例代码
@@ -18,6 +19,8 @@ public class Demo09_1 {
         blockingQueue.inAndOut2();
         System.out.println("\n===============第三组方法：put(obj)、take()");
         blockingQueue.inAndOut3();
+        System.out.println("\n===============第四组方法：offer(e,time,unit)、poll(time,unit)");
+        blockingQueue.inAndOut4();
     }
 
 }
@@ -104,7 +107,7 @@ class Demo09_1BlockingQueue {
             System.out.println("插入c成功");
             // 查看队首元素
             System.out.println("此时队首元素为" + blockingQueue.peek());
-            // 此时阻塞队列已经满队，如果再像队列中插入元素，就会造成阻塞，所以在插入之前用另外一条线程对其模拟移除元素的操作
+            // 此时阻塞队列已经满队，如果再向队列中插入元素，就会造成阻塞，所以在插入之前用另外一条线程对其模拟移除元素的操作
             new Thread(() -> {
                 try {
                     // 先让线程睡1s，模拟正在处理其他请求
@@ -120,14 +123,56 @@ class Demo09_1BlockingQueue {
             // 为了更好的演示和避免因println方法耗时过长打印顺序混乱的问题，线程小睡0.1s
             Thread.sleep(100);
             System.out.println("插入d成功");
-
-            // todo 完善代码
-
+            // 开始移除队列中的元素
+            System.out.println("接下来移除队列中的元素");
+            System.out.println("成功移除" + blockingQueue.take());
+            System.out.println("成功移除" + blockingQueue.take());
+            System.out.println("成功移除" + blockingQueue.take());
+            // 此时阻塞队列已经空队，如果再从队列中移除元素，就会造成阻塞，所以在移除之前用另外一条线程对其模拟插入元素的操作
+            new Thread(() -> {
+                try {
+                    // 先让线程睡1s，模拟正在处理其他请求
+                    Thread.sleep(1000);
+                    // 然后向队列中插入元素，用任何插入方法均可
+                    blockingQueue.offer("e");
+                    System.out.println("子线程尾插入元素：e");
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }).start();
+            System.out.println("移除时发生了阻塞，等待中...");
+            String take = blockingQueue.take();
+            // 为了更好的演示和避免因println方法耗时过长打印顺序混乱的问题，线程小睡0.1s
+            Thread.sleep(100);
+            System.out.println("移除" + take + "成功");
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-
     }
 
+    /**
+     * 第四组方法：offer(e,time,unit)、poll(time,unit)
+     */
+    public void inAndOut4() {
+        try {
+            // 向阻塞队列中使用尾插法插入三个元素
+            System.out.println("插入a" + (blockingQueue.offer("a") ? "成功" : "失败"));
+            System.out.println("插入b" + (blockingQueue.offer("b") ? "成功" : "失败"));
+            System.out.println("插入c" + (blockingQueue.offer("c") ? "成功" : "失败"));
+            // 查看队首元素
+            System.out.println("此时队首元素为" + blockingQueue.peek());
+            // 再定时插入一个
+            System.out.println("长时间满队，插入d" + (blockingQueue.offer("d", 1, TimeUnit.SECONDS) ? "成功" : "失败"));
+            // 开始移除队列中的元素
+            System.out.println("接下来移除队列中的元素");
+            System.out.println("成功移除" + blockingQueue.poll());
+            System.out.println("成功移除" + blockingQueue.poll());
+            System.out.println("成功移除" + blockingQueue.poll());
+            // 再定时移除一个
+            System.out.println("长时间空队，移除"+blockingQueue.poll(1,TimeUnit.SECONDS));
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
 }
