@@ -44,19 +44,19 @@ class Demo05_1NoFairLock {
     /**
      * 定义一个ReentrantLock锁，默认就是非公平锁
      */
-    private final ReentrantLock LOCK = new ReentrantLock();
+    private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * 多线程方法
      */
     public void method() {
-        LOCK.lock();
+        lock.lock();
         try {
             if (defaultNum < 15) {
                 System.out.println(Thread.currentThread().getName() + "：现在是" + (defaultNum++) + ",自增之后是" + defaultNum);
             }
         } finally {
-            LOCK.unlock();
+            lock.unlock();
         }
     }
 

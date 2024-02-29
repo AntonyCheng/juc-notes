@@ -44,19 +44,19 @@ class Demo05_2FairLock {
     /**
      * 定义一个ReentrantLock锁，添加true构造参数，即可创建一个公平锁
      */
-    private final ReentrantLock LOCK = new ReentrantLock(true);
+    private final ReentrantLock lock = new ReentrantLock(true);
 
     /**
      * 多线程方法
      */
     public void method() {
-        LOCK.lock();
+        lock.lock();
         try {
             if (defaultNum < 30) {
                 System.out.println(Thread.currentThread().getName() + "：现在是" + (defaultNum++) + ",自增之后是" + defaultNum);
             }
         } finally {
-            LOCK.unlock();
+            lock.unlock();
         }
     }
 

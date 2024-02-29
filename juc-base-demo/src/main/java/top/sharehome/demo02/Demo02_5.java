@@ -44,29 +44,29 @@ class LockTicket {
     /**
      * 定义可重入锁
      */
-    private static final ReentrantLock LOCK = new ReentrantLock();
+    private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * 定义门票数量
      */
-    private static int ticketNumber = 30;
+    private int ticketNumber = 30;
 
     /**
      * 定义卖出数量
      */
-    private static int saleNumber = 0;
+    private int saleNumber = 0;
 
     /**
      * 定义售票方法，这里使用synchronized修饰代码块
      */
     public void sale() {
-        LOCK.lock();
+        lock.lock();
         try{
             if (ticketNumber > 0) {
                 System.out.println(Thread.currentThread().getName() + "卖出第" + (++saleNumber) + "张票，还剩" + (--ticketNumber) + "张票");
             }
         }finally {
-            LOCK.unlock();
+            lock.unlock();
         }
     }
 

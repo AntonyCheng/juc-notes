@@ -43,12 +43,12 @@ class Ticket {
     /**
      * 定义门票数量
      */
-    private static int ticketNumber = 30;
+    private int ticketNumber = 30;
 
     /**
      * 定义卖出数量
      */
-    private static int saleNumber = 0;
+    private int saleNumber = 0;
 
     /**
      * 定义售票方法，这里使用synchronized修饰代码块
