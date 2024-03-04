@@ -3937,13 +3937,590 @@ public class Demo13_1 {
 
 #### 没有返回值的异步任务
 
+运行一个没有返回值的异步任务，需要使用 CompletableFuture 中的 **`runAsync()`** 方法，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_2.java)如下：
+
+```java
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+/**
+ * 运行一个没有返回值的异步任务
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_2 {
+
+    public static void main(String[] args) {
+        // 运行一个不需要返回值的异步方法
+        CompletableFuture<Void> voidCompletableFuture = CompletableFuture.runAsync(() -> {
+            System.out.println(Thread.currentThread().getName() + "线程：正在投递日志消息...");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName() + "线程：投递消息成功！");
+        });
+        // 结束消息投递
+        try {
+            System.out.println(Thread.currentThread().getName()+"线程：等待异步任务调用完成...");
+            voidCompletableFuture.get();
+            System.out.println(Thread.currentThread().getName()+"线程：异步线程结束，本线程也结束！");
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304084143895](./assets/image-20240304084143895.png)
+
 #### 有返回值的异步任务
+
+运行一个有返回值的异步任务，需要使用 CompletableFuture 中的 **`supplyAsync()`** 方法，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_3.java)如下：
+
+```java
+package top.sharehome.demo13;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+/**
+ * 运行一个有返回值的异步任务
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_3 {
+
+    public static void main(String[] args) {
+        // 运行一个需要返回值的异步方法
+        CompletableFuture<Integer> voidCompletableFuture = CompletableFuture.supplyAsync(() -> {
+            System.out.println(Thread.currentThread().getName() + "线程：正在投递日志消息...");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName() + "线程：投递消息成功！");
+            return 200;
+        });
+        // 结束消息投递
+        try {
+            System.out.println(Thread.currentThread().getName() + "线程：等待异步任务调用完成...");
+            Integer res = voidCompletableFuture.get();
+            if (res == 200) {
+                System.out.println(Thread.currentThread().getName() + "线程：异步线程结束，返回值为" + res + "，本线程也结束！");
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304084608677](./assets/image-20240304084608677.png)
 
 #### 线程依赖
 
+当一个线程依赖另一个线程时，可以使用 **`thenApply()/thenApplyAsync()`** 方法来把这两个线程串行化，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_4.java)如下：
+
+```java
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 先用一个线程将一个数加10，然后再对其取平方，最后得到结果
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_4 {
+
+    public static void main(String[] args) {
+        AtomicInteger initNum = new AtomicInteger(10);
+        CompletableFuture<Integer> future = CompletableFuture.supplyAsync(() -> {
+            // 模拟程序执行延迟
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName() + "线程：正在执行加10操作...");
+            initNum.addAndGet(10);
+            System.out.println(Thread.currentThread().getName() + "线程：加10操作完成！");
+            return initNum;
+        }).thenApplyAsync(num -> {
+            // 模拟程序执行延迟
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName() + "线程：正在执行平方操作...");
+            int i = num.accumulateAndGet(num.get(), (num1, num2) -> num1 * num2);
+            System.out.println(Thread.currentThread().getName() + "线程：平方操作完成！");
+            return i;
+        });
+        try {
+            System.out.println(Thread.currentThread().getName() + "线程：等待异步程序执行...");
+            Integer res = future.get();
+            System.out.println(Thread.currentThread().getName() + "线程：异步程序执行结果为" + res);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304094926304](./assets/image-20240304094926304.png)
+
 #### 消费处理结果
+
+如果想要最后获取数据的操作也在异步线程中直接进行，可以直接使用 **`thenAccept()/thenAcceptAsync()`** 方法，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_5.java)如下：
+
+```java
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 先用一个线程将一个数加10，然后再对其取平方，最后在异步线程中继续处理最后的数据
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_5 {
+
+    public static void main(String[] args) {
+        AtomicInteger initNum = new AtomicInteger(10);
+        CompletableFuture.supplyAsync(() -> {
+            // 模拟程序执行延迟
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName() + "线程：正在执行加10操作...");
+            initNum.addAndGet(10);
+            System.out.println(Thread.currentThread().getName() + "线程：加10操作完成！");
+            return initNum;
+        }).thenApplyAsync(num -> {
+            // 模拟程序执行延迟
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName() + "线程：正在执行平方操作...");
+            int i = num.get();
+            System.out.println(Thread.currentThread().getName() + "线程：平方操作完成！");
+            return i * i;
+        }).thenAcceptAsync(res -> {
+            System.out.println(Thread.currentThread().getName() + "线程：已经计算出最后结果为" + res);
+        });
+        System.out.println(Thread.currentThread().getName() + "线程：等待异步程序执行...");
+        try {
+            // 由于以上的xxxAsync操作均在守护线程中进行，需要阻塞主线程
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println("整个程序执行完成！");
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304100513614](./assets/image-20240304100513614.png)
 
 #### 异常处理
 
+处理异常有两种方案，第一种是**仅监听异常**类型，使用 `exceptionally()` 方法，另一种是**监听异常和结果**类型，使用 `handle()` 方法，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_6.java)如下：
+
+```java
+import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+/**
+ * 异常处理方案
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_6 {
+
+    /**
+     * 仅监听异常
+     */
+    private static void method01() {
+        CompletableFuture<Integer> future = CompletableFuture.supplyAsync(() -> {
+            // 模拟程序执行延迟
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName() + "线程：正在执行异步操作...");
+            int randomNum = new Random().nextInt(100);
+            if (randomNum % 2 == 0) {
+                System.out.println(Thread.currentThread().getName() + "线程：异步操作完成！");
+                return randomNum;
+            } else {
+                throw new RuntimeException("Random number is invalid");
+            }
+        }).exceptionally(ex -> {
+            System.out.println(Thread.currentThread().getName() + "线程：抓住异常——" + ex.getMessage());
+            return 500;
+        });
+        System.out.println(Thread.currentThread().getName() + "线程：等待异步程序执行...");
+        try {
+            Integer futureRes = future.get();
+            if (futureRes == 500) {
+                System.out.println(Thread.currentThread().getName() + "线程：异步程序出现错误！");
+            } else {
+                System.out.println(Thread.currentThread().getName() + "线程：异步程序执行成功，返回结果为：" + futureRes);
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 监听异常和结果
+     */
+    private static void method02() {
+        CompletableFuture<Integer> future = CompletableFuture.supplyAsync(() -> {
+            // 模拟程序执行延迟
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(Thread.currentThread().getName() + "线程：正在执行异步操作...");
+            int randomNum = new Random().nextInt(100);
+            if (randomNum % 2 == 0) {
+                System.out.println(Thread.currentThread().getName() + "线程：异步操作完成！");
+                return randomNum;
+            } else {
+                throw new RuntimeException("Random number is invalid");
+            }
+        }).handle((res, ex) -> {
+            if (ex != null) {
+                System.out.println(Thread.currentThread().getName() + "线程：抓住异常——" + ex.getMessage());
+                return 500;
+            } else {
+                return res;
+            }
+        });
+        System.out.println(Thread.currentThread().getName() + "线程：等待异步程序执行...");
+        try {
+            Integer futureRes = future.get();
+            if (futureRes == 500) {
+                System.out.println(Thread.currentThread().getName() + "线程：异步程序出现错误！");
+            } else {
+                System.out.println(Thread.currentThread().getName() + "线程：异步程序执行成功，返回结果为：" + futureRes);
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void main(String[] args) {
+        method01();
+        System.out.println();
+        method02();
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304103648142](./assets/image-20240304103648142.png)
+
 #### 结果合并
+
+结果合并有很多种情况，所用到的 API 也不尽相同，具体情况下文有介绍。
+
+**合并两个有依赖关系的 CompletableFuture 的执行结果—— `thenCompose()`，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_7.java)如下：**
+
+```java
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 合并两个有依赖关系的 CompletableFuture 的执行结果
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_7 {
+
+    public static void main(String[] args) {
+        AtomicInteger atomicInteger = new AtomicInteger(10);
+        // 第一个CompletableFuture对一个数进行加10
+        CompletableFuture<Integer> firstFuture = CompletableFuture.supplyAsync(() -> {
+            return atomicInteger.addAndGet(10);
+        });
+        // 合并第二个CompletableFuture
+        CompletableFuture<Integer> secondFuture = firstFuture.thenComposeAsync(res -> {
+            // 第二个CompletableFuture对第一个CompletableFuture的结果平方
+            return CompletableFuture.supplyAsync(() -> res * res);
+        });
+        try {
+            System.out.println("第一个CompletableFuture计算结果为："+firstFuture.get());
+            System.out.println("第二个CompletableFuture计算结果为："+secondFuture.get());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304122248184](./assets/image-20240304122248184.png)
+
+**合并两个没有依赖关系的 CompletableFuture 的执行结果—— `thenCombine()`，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_9.java)如下：**
+
+```java
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 合并两个没有依赖关系的 CompletableFuture 的执行结果
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_9 {
+
+    public static void main(String[] args) {
+        AtomicInteger atomicInteger = new AtomicInteger(10);
+        // 第一个CompletableFuture对一个数进行加10
+        CompletableFuture<Integer> firstFuture = CompletableFuture.supplyAsync(() -> atomicInteger.addAndGet(10));
+        // 第二个CompletableFuture对同一个数进行乘10
+        CompletableFuture<Integer> secondFuture = CompletableFuture.supplyAsync(() -> atomicInteger.accumulateAndGet(10, (left, right) -> left * right));
+        // 将两个CompletableFuture的结果相加
+        CompletableFuture<Integer> resFuture = firstFuture.thenCombine(secondFuture, Integer::sum);
+        try {
+            System.out.println("两个CompletableFuture合并相加结果为：" + resFuture.get());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304123226887](./assets/image-20240304123226887.png)
+
+**一系列独立的 CompletableFuture 任务，等其所有的任务执行完后做一些事情—— `allOf()`，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_10.java)如下：**
+
+```java
+import java.time.LocalDateTime;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 一系列独立的 CompletableFuture 任务，等其所有的任务执行完后做一些事情
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_10 {
+
+    public static void main(String[] args) {
+        // 定义初始化值
+        AtomicInteger atomicInteger = new AtomicInteger(10);
+        // 定义结果值
+        AtomicInteger result = new AtomicInteger(0);
+        // 第一个CompletableFuture对一个数进行加10
+        CompletableFuture<Integer> future1 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(10);
+        });
+        // 第二个CompletableFuture对同一个数进行加20
+        CompletableFuture<Integer> future2 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(20);
+        });
+        // 第三个CompletableFuture对同一个数再进行加30
+        CompletableFuture<Integer> future3 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(30);
+        });
+        try {
+            // 将三个CompletableFuture的结果相加
+            CompletableFuture<Void> voidCompletableFuture = CompletableFuture.allOf(future1, future2, future3);
+            Integer result1 = future1.get();
+            result.addAndGet(result1);
+            System.out.println(LocalDateTime.now() + " ==> " + result1);
+            Integer result2 = future2.get();
+            result.addAndGet(result2);
+            System.out.println(LocalDateTime.now() + " ==> " + result2);
+            Integer result3 = future3.get();
+            result.addAndGet(result3);
+            System.out.println(LocalDateTime.now() + " ==> " + result3);
+            // 没有合并完之前，不会执行voidCompletableFuture.get()之后的程序
+            voidCompletableFuture.get();
+            System.out.println("相加结果为：" + result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304131002095](./assets/image-20240304131002095.png)
+
+**一系列独立的 CompletableFuture 任务，只要有任务完成就结束其他任务—— `anyOf()`，[示例代码](./juc-base-demo/src/main/java/top/sharehome/demo13/Demo13_11.java)如下：**
+
+```java
+import java.time.LocalDateTime;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 一系列独立的 CompletableFuture 任务，只要有任务完成就结束其他任务
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_11 {
+
+    public static void main(String[] args) {
+        // 定义初始化值
+        AtomicInteger atomicInteger = new AtomicInteger(10);
+        // 定义结果值
+        AtomicInteger result = new AtomicInteger(0);
+        // 第一个CompletableFuture对一个数进行加10
+        CompletableFuture<Integer> future1 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(10);
+        });
+        // 第二个CompletableFuture对同一个数进行加20
+        CompletableFuture<Integer> future2 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(20);
+        });
+        // 第三个CompletableFuture对同一个数再进行加30
+        CompletableFuture<Integer> future3 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(30);
+        });
+        try {
+            // 等待一个CompletableFuture任务完成就返回
+            CompletableFuture<Object> objectCompletableFuture = CompletableFuture.anyOf(future1, future2, future3);
+            result.addAndGet((Integer) objectCompletableFuture.get());
+            System.out.println("第一个完成的任务结果为：" + result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+```java
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 一系列独立的 CompletableFuture 任务，只要有任务完成就结束其他任务
+ *
+ * @author AntonyCheng
+ */
+public class Demo13_11 {
+
+    public static void main(String[] args) {
+        // 定义初始化值
+        AtomicInteger atomicInteger = new AtomicInteger(10);
+        // 定义结果值
+        AtomicInteger result = new AtomicInteger(0);
+        // 第一个CompletableFuture对一个数进行加10
+        CompletableFuture<Integer> future1 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(10);
+        });
+        // 第二个CompletableFuture对同一个数进行加20
+        CompletableFuture<Integer> future2 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(20);
+        });
+        // 第三个CompletableFuture对同一个数再进行加30
+        CompletableFuture<Integer> future3 = CompletableFuture.supplyAsync(() -> {
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return atomicInteger.addAndGet(30);
+        });
+        try {
+            // 等待一个CompletableFuture任务完成就返回
+            CompletableFuture<Object> objectCompletableFuture = CompletableFuture.anyOf(future1, future2, future3);
+            result.addAndGet((Integer) objectCompletableFuture.get());
+            System.out.println("第一个完成的任务结果为：" + result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+}
+```
+
+运行结果如下：
+
+![image-20240304131457199](./assets/image-20240304131457199.png)
 
